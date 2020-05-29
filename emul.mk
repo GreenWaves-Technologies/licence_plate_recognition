@@ -10,9 +10,6 @@ endif
 
 include common.mk
 
-#IMAGE=$(CURDIR)/images/0m_1_resized.ppm
-#IMAGE=$(CURDIR)/images/2m_3.ppm
-
 io=host
 
 QUANT_BITS=8
@@ -21,21 +18,28 @@ MODEL_SQ8=1
 
 $(info Building GAP8 mode with $(QUANT_BITS) bit quantization)
 
-NNTOOL_SCRIPT=model/nntool_script#_ssdlite
+ifeq ($(MODEL),1)
+	NNTOOL_SCRIPT=model/nntool_script
+	TRAINED_TFLITE_MODEL=model/lprnet.tflite
+else
+	NNTOOL_SCRIPT=model/nntool_script_ssdlite
+	TRAINED_TFLITE_MODEL=model/ssdlite_v2_quant_ocr_nntool.tflite
+endif
+
 MODEL_SUFFIX = _SQ8BIT_EMUL
-#TRAINED_TFLITE_MODEL=model/ssdlite_v2_quant_ocr_nntool.tflite
-TRAINED_TFLITE_MODEL=model/china_ocr.tflite
 MODEL_QUANTIZED = 1
 
 include common/model_decl.mk
 
 CC = gcc
-CFLAGS += -g -m32 -O0 -D__EMUL__ -DAT_MODEL_PREFIX=$(MODEL_PREFIX) $(MODEL_SIZE_CFLAGS)
+CFLAGS += -g -m32 -O1 -D__EMUL__ -DAT_MODEL_PREFIX=$(MODEL_PREFIX) $(MODEL_SIZE_CFLAGS)
 INCLUDES = -I. -I$(TILER_EMU_INC) -I$(TILER_INC) $(CNN_LIB_INCLUDE) -I$(MODEL_BUILD) -I$(MODEL_COMMON_INC)
 LFLAGS =
 LIBS =
 SRCS = $(MODEL_PREFIX).c $(MODEL_GEN_C) $(MODEL_COMMON_SRCS) $(CNN_LIB)
 BUILD_DIR = BUILD_EMUL
+
+MODEL_GEN_EXTRA_FLAGS= -f $(MODEL_BUILD)
 
 OBJS = $(patsubst %.c, $(BUILD_DIR)/%.o, $(SRCS))
 
@@ -55,7 +59,7 @@ MODEL_L3_EXEC=hram
 # qpsiflash - Quad SPI Flash
 MODEL_L3_CONST=hflash
 
-all:: model $(MAIN)  
+all:: model $(MAIN)
 
 $(OBJS) : $(BUILD_DIR)/%.o : %.c
 	@mkdir -p $(dir $@)

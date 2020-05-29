@@ -17,6 +17,7 @@
 #define __STR(__s) #__s
 
 #ifdef __EMUL__
+char *ImageName;
 #ifdef PERF
 #undef PERF
 #endif
@@ -30,7 +31,9 @@
 
 AT_HYPERFLASH_FS_EXT_ADDR_TYPE __PREFIX(_L3_Flash) = 0;
 
-signed char Output_1[71*81];
+static char *CHAR_DICT [71] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "<Anhui>", "<Beijing>", "<Chongqing>", "<Fujian>", "<Gansu>", "<Guangdong>", "<Guangxi>", "<Guizhou>", "<Hainan>", "<Hebei>", "<Heilongjiang>", "<Henan>", "<HongKong>", "<Hubei>", "<Hunan>", "<InnerMongolia>", "<Jiangsu>", "<Jiangxi>", "<Jilin>", "<Liaoning>", "<Macau>", "<Ningxia>", "<Qinghai>", "<Shaanxi>", "<Shandong>", "<Shanghai>", "<Shanxi>", "<Sichuan>", "<Tianjin>", "<Tibet>", "<Xinjiang>", "<Yunnan>", "<Zhejiang>", "<police>", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "_"};
+
+signed char Output_1[71*88];
 typedef signed char IMAGE_IN_T;
 unsigned char Input_1[AT_INPUT_SIZE];
 
@@ -48,18 +51,29 @@ static void RunNetwork()
 #endif
 	__PREFIX(CNN)(Input_1, Output_1);
 	printf("Runner completed\n");
-
+	int max_prob, predicted_char = 70;
+	for (int i=0; i<88; i++){
+		for (int j=0; j<71; j++){
+			if (Output_1[i*71+j]>max_prob){
+				max_prob = Output_1[i*71+j];
+				predicted_char = j;
+			}
+		}
+		if (predicted_char==70) continue;
+		printf("%s, ", CHAR_DICT[predicted_char]);
+	}
 	printf("\n");
 }
 
 int start()
 {
+	printf("Entering main controller\n");
+	
+#ifndef __EMUL__
 	char *ImageName = __XSTR(AT_IMAGE);
 	struct pi_device cluster_dev;
 	struct pi_cluster_task *task;
 	struct pi_cluster_conf conf;
-
-	printf("Entering main controller\n");
 
 	pi_cluster_conf_init(&conf);
 	pi_open_from_conf(&cluster_dev, (void *)&conf);
@@ -75,6 +89,7 @@ int start()
 	task->stack_size = STACK_SIZE;
 	task->slave_stack_size = SLAVE_STACK_SIZE;
 	task->arg = NULL;
+#endif
 
 	printf("Constructor\n");
 	// IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
@@ -94,8 +109,12 @@ int start()
 	printf("Finished reading image\n");
 
 	printf("Call cluster\n");
+#ifndef __EMUL__
 	// Execute the function "RunNetwork" on the cluster.
 	pi_cluster_send_task_to_cl(&cluster_dev, task);
+#else
+	RunNetwork();
+#endif
 
 	__PREFIX(CNN_Destruct)();
 
@@ -114,12 +133,30 @@ int start()
 	}
 #endif
 
+#ifndef __EMUL__
 	pmsis_exit(0);
+#endif
 	printf("Ended\n");
 	return 0;
 }
 
+#ifndef __EMUL__
 int main(void)
 {
-	return pmsis_kickoff((void *) start);
+    printf("\n\n\t *** NNTOOL LPRNET ***\n\n");
+  	return pmsis_kickoff((void *) start);
 }
+#else
+int main(int argc, char *argv[])
+{
+    if (argc < 2)
+    {
+        printf("Usage: mnist [image_file]\n");
+        exit(-1);
+    }
+    ImageName = argv[1];
+    printf("\n\n\t *** NNTOOL LPRNET emul ***\n\n");
+    start();
+    return 0;
+}
+#endif
