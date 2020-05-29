@@ -10,7 +10,7 @@
 #include <stdio.h>
 
 #include "lprnet.h"
-#include "vwwKernels.h"
+#include "lprnetKernels.h"
 #include "ImgIO.h"
 
 #define __XSTR(__s) __STR(__s)

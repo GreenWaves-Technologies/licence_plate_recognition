@@ -10,8 +10,8 @@ endif
 
 include common.mk
 
-#IMAGE=$(CURDIR)/images/0m_1_resized.ppm
-IMAGE=$(CURDIR)/images/2m_3.ppm
+IMAGE=$(CURDIR)/images/0m_1_resized.ppm
+#IMAGE=$(CURDIR)/images/2m_3.ppm
 
 io=host
 
@@ -21,10 +21,10 @@ MODEL_SQ8=1
 
 $(info Building GAP8 mode with $(QUANT_BITS) bit quantization)
 
-NNTOOL_SCRIPT=model/nntool_script_ssdlite
+NNTOOL_SCRIPT=model/nntool_script#_ssdlite
 MODEL_SUFFIX = _SQ8BIT
-TRAINED_TFLITE_MODEL=model/ssdlite_v2_quant_ocr_nntool.tflite
-#TRAINED_TFLITE_MODEL=model/china_ocr.tflite
+#TRAINED_TFLITE_MODEL=model/ssdlite_v2_quant_ocr_nntool.tflite
+TRAINED_TFLITE_MODEL=model/lprnet_old.tflite
 MODEL_QUANTIZED = 1
 
 include common/model_decl.mk
@@ -37,7 +37,7 @@ CLUSTER_STACK_SIZE=4096
 CLUSTER_SLAVE_STACK_SIZE=1024
 TOTAL_STACK_SIZE=$(shell expr $(CLUSTER_STACK_SIZE) \+ $(CLUSTER_SLAVE_STACK_SIZE) \* 7)
 MODEL_L1_MEMORY=$(shell expr 60000 \- $(TOTAL_STACK_SIZE))
-MODEL_L2_MEMORY=200000
+MODEL_L2_MEMORY=250000
 MODEL_L3_MEMORY=8388608
 # hram - HyperBus RAM
 # qspiram - Quad SPI RAM

@@ -2,7 +2,7 @@
 #ifndef __VERGESENSE_H__
 #define __VERGESENSE_H__
 
-#define __PREFIX(x) china_ocr ## x
+#define __PREFIX(x) lprnet ## x
 
 #include "Gap.h"
 
