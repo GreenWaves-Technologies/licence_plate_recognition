@@ -40,7 +40,7 @@ char *ImageName;
   #endif
 #endif
 typedef signed char IMAGE_IN_T;
-L2_MEM IMAGE_IN_T *Input_1;
+L2_MEM IMAGE_IN_T *Input_1[AT_INPUT_SIZE];
 
 L2_MEM char *Output_1;
 L2_MEM char *Output_2;
@@ -121,7 +121,7 @@ int start()
 
   printf("Reading image\n");
   //Reading Image from Bridge
-  if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH, AT_INPUT_HEIGHT, AT_INPUT_COLORS, Input_1, AT_INPUT_WIDTH*AT_INPUT_HEIGHT*sizeof(unsigned short), IMGIO_OUTPUT_RGB565, 0)) {
+  if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH, AT_INPUT_HEIGHT, AT_INPUT_COLORS, Input_1, AT_INPUT_SIZE*sizeof(unsigned char), IMGIO_OUTPUT_CHAR, 0)) {
     printf("Failed to load image %s\n", ImageName);
     return 1;
   }
