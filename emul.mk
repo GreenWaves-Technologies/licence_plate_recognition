@@ -19,14 +19,15 @@ MODEL_SQ8=1
 $(info Building GAP8 mode with $(QUANT_BITS) bit quantization)
 
 ifeq ($(MODEL),1)
-	NNTOOL_SCRIPT=model/nntool_script
+	NNTOOL_SCRIPT=model/nntool_script_emul_lprnet
 	TRAINED_TFLITE_MODEL=model/lprnet.tflite
+	MODEL_SUFFIX = _SQ8BIT_LPRNET_EMUL
 else
-	NNTOOL_SCRIPT=model/nntool_script_ssdlite
+	NNTOOL_SCRIPT=model/nntool_script_emul_ssdlite
 	TRAINED_TFLITE_MODEL=model/ssdlite_v2_quant_ocr_nntool.tflite
+	MODEL_SUFFIX = _SQ8BIT_SSD_EMUL
 endif
 
-MODEL_SUFFIX = _SQ8BIT_EMUL
 MODEL_QUANTIZED = 1
 
 include common/model_decl.mk

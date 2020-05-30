@@ -10,9 +10,6 @@ endif
 
 include common.mk
 
-IMAGE=$(CURDIR)/images/0m_1_resized.ppm
-#IMAGE=$(CURDIR)/images/2m_3.ppm
-
 io=host
 
 QUANT_BITS=8
@@ -22,14 +19,17 @@ MODEL_SQ8=1
 $(info Building GAP8 mode with $(QUANT_BITS) bit quantization)
 
 ifeq ($(MODEL),1)
-	NNTOOL_SCRIPT=model/nntool_script
+	NNTOOL_SCRIPT=model/nntool_script_lprnet
 	TRAINED_TFLITE_MODEL=model/lprnet.tflite
+	MODEL_SUFFIX = _SQ8BIT_LPRNET
+	IMAGE=$(CURDIR)/images/0m_1_resized.ppm
 else
 	NNTOOL_SCRIPT=model/nntool_script_ssdlite
 	TRAINED_TFLITE_MODEL=model/ssdlite_v2_quant_ocr_nntool.tflite
+	MODEL_SUFFIX = _SQ8BIT_SSD
+	IMAGE=$(CURDIR)/images/2m_3.ppm
 endif
 
-MODEL_SUFFIX = _SQ8BIT_EMUL
 MODEL_QUANTIZED = 1
 
 include common/model_decl.mk
@@ -72,7 +72,7 @@ SSD_MODEL_GEN  = SSDKernels
 SSD_MODEL_GEN_C = $(addsuffix .c, $(SSD_MODEL_GEN))
 SSD_MODEL_GEN_CLEAN = $(SSD_MODEL_GEN_C) $(addsuffix .h, $(SSD_MODEL_GEN))
 
-
+############################# SSD #############################
 
 GenSSDTile: $(SSD_MODEL_FILE)
 	gcc -g -o GenSSDTile -I"$(TILER_INC)" $(SSD_MODEL_FILE) $(TILER_LIB)
@@ -88,7 +88,7 @@ clean_ssd:
 	rm -rf $(MODEL_BUILD)/SSDParams.c $(MODEL_BUILD)/SSDParams.h
 	rm -rf GenSSDTile $(SSD_MODEL_GEN_CLEAN)
 
-
+###############################################################
 
 # all depends on the model
 all:: model #SSD_model
