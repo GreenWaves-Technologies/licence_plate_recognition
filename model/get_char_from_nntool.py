@@ -15,6 +15,6 @@ for i, char_code in enumerate(out_char_codes):
         if char_code == v:
             out_char.append(k)
             continue
-
+print(len(out_char_codes))
 print(out_char)
 print(out_char_codes)
