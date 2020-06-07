@@ -11,7 +11,7 @@
 
 #include "lprnet.h"
 #include "lprnetKernels.h"
-#include "ImgIO.h"
+#include "gaplib/ImgIO.h"
 
 #define __XSTR(__s) __STR(__s)
 #define __STR(__s) #__s

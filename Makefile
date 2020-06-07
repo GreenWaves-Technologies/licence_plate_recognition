@@ -25,7 +25,7 @@ ifeq ($(MODEL),1)
 	IMAGE=$(CURDIR)/images/0m_1_resized.ppm
 else
 	NNTOOL_SCRIPT=model/nntool_script_ssdlite
-	TRAINED_TFLITE_MODEL=model/ssdlite_v2_quant_ocr_nntool.tflite
+	TRAINED_TFLITE_MODEL=model/ssdlite_v2_quant_ocr_nopostprocess.tflite
 	MODEL_SUFFIX = _SQ8BIT_SSD
 	IMAGE=$(CURDIR)/images/2m_3.ppm
 endif
@@ -42,7 +42,7 @@ CLUSTER_STACK_SIZE=4096
 CLUSTER_SLAVE_STACK_SIZE=1024
 TOTAL_STACK_SIZE=$(shell expr $(CLUSTER_STACK_SIZE) \+ $(CLUSTER_SLAVE_STACK_SIZE) \* 7)
 MODEL_L1_MEMORY=$(shell expr 60000 \- $(TOTAL_STACK_SIZE))
-MODEL_L2_MEMORY=300000
+MODEL_L2_MEMORY=200000
 MODEL_L3_MEMORY=8388608
 # hram - HyperBus RAM
 # qspiram - Quad SPI RAM
@@ -60,7 +60,7 @@ APP_CFLAGS += -I. -I$(MODEL_COMMON_INC) -I$(TILER_EMU_INC) -I$(TILER_INC) $(CNN_
 APP_CFLAGS += -DPERF -DAT_MODEL_PREFIX=$(MODEL_PREFIX) $(MODEL_SIZE_CFLAGS)
 APP_CFLAGS += -DSTACK_SIZE=$(CLUSTER_STACK_SIZE) -DSLAVE_STACK_SIZE=$(CLUSTER_SLAVE_STACK_SIZE)
 APP_CFLAGS += -DAT_IMAGE=$(IMAGE)
-APP_LDFLAGS += -lm
+#APP_LDFLAGS += -lm
 
 READFS_FILES=$(abspath $(MODEL_TENSORS))
 PLPBRIDGE_FLAGS += -f
@@ -93,7 +93,7 @@ clean_ssd:
 # all depends on the model
 all:: model #SSD_model
 
-clean:: clean_model #clean_ssd
+clean:: #clean_model #clean_ssd
 
 include common/model_rules.mk
 $(info APP_SRCS... $(APP_SRCS))
