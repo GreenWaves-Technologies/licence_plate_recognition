@@ -1,8 +1,7 @@
+#ifndef __OCRSSD_H__
+#define __OCRSSD_H__
 
-#ifndef __VERGESENSE_H__
-#define __VERGESENSE_H__
-
-#define __PREFIX(x) ssdlite_v2_quant_ocr_nntool ## x
+#define __PREFIX(x) ssdlite_ocr ## x
 
 #include "Gap.h"
 

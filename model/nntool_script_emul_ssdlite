@@ -1,4 +1,6 @@
 set debug true
+freeze output_1
+freeze output_2
 adjust
 fusions --scale8
 set input_norm_func "x: x/128-1"
@@ -9,5 +11,5 @@ set graph_produce_operinfos true
 set graph_monitor_cycles true
 set graph_const_exec_from_flash true
 #set graph_dump_tensor 7
-#set graph_trace_exec true
+set graph_trace_exec true
 save_state
