@@ -68,10 +68,19 @@ static void RunNetwork()
   __PREFIX(CNN)(l3_buff, Output_1, Output_2);//, Output_3, Output_4, Output_5, Output_6, Output_7, Output_8, Output_9, Output_10, Output_11, Output_12);
 #else
   __PREFIX(CNN)(Input_1, Output_1, Output_2);//, Output_3, Output_4, Output_5, Output_6, Output_7, Output_8, Output_9, Output_10, Output_11, Output_12);
-#endif  
+#endif 
   printf("Runner completed\n");
-
   printf("\n");
+  printf("\n\n\n");
+  printf("Output_1:\t");
+  for (int i=0; i<1554*2; i++){
+    printf("%d, ", Output_1[i]);
+  }
+  printf("\n\n\n");
+  printf("Output_2:\t");
+  for (int i=0; i<1554*4; i++){
+    printf("%d, ", Output_2[i]);
+  }
 }
 
 int start()
@@ -135,20 +144,8 @@ int start()
 
   printf("Constructor\n");
   //Allocate output buffers:
-/*  Output_1  = (unsigned char*)AT_L2_ALLOC(0, 900*4* sizeof(unsigned char));
-  Output_2  = (unsigned char*)AT_L2_ALLOC(0, 480*4* sizeof(unsigned char));
-  Output_3  = (unsigned char*)AT_L2_ALLOC(0, 120*4* sizeof(unsigned char));
-  Output_4  = (unsigned char*)AT_L2_ALLOC(0, 36 *4* sizeof(unsigned char));
-  Output_5  = (unsigned char*)AT_L2_ALLOC(0, 12 *4* sizeof(unsigned char));
-  Output_6  = (unsigned char*)AT_L2_ALLOC(0, 6  *4* sizeof(unsigned char));
-  Output_7  = (unsigned char*)AT_L2_ALLOC(0, 900*2* sizeof(unsigned char));
-  Output_8  = (unsigned char*)AT_L2_ALLOC(0, 480*2* sizeof(unsigned char));
-  Output_9  = (unsigned char*)AT_L2_ALLOC(0, 120*2* sizeof(unsigned char));
-  Output_10 = (unsigned char*)AT_L2_ALLOC(0, 36 *2* sizeof(unsigned char));
-  Output_11 = (unsigned char*)AT_L2_ALLOC(0, 12 *2* sizeof(unsigned char));
-  Output_12 = (unsigned char*)AT_L2_ALLOC(0, 6  *2* sizeof(unsigned char));*/
-  Output_1  = (unsigned char*)AT_L2_ALLOC(0, 1554*4*sizeof(unsigned char));
-  Output_2  = (unsigned char*)AT_L2_ALLOC(0, 1554*2*sizeof(unsigned char));
+  Output_1  = (unsigned char*)AT_L2_ALLOC(0, 1554*2*sizeof(unsigned char));
+  Output_2  = (unsigned char*)AT_L2_ALLOC(0, 1554*4*sizeof(unsigned char));
 
   if(Output_1==NULL||Output_2==NULL){//||Output_3==NULL||Output_4==NULL||Output_5==NULL||Output_6==NULL||Output_7==NULL||Output_8==NULL||Output_9==NULL||Output_10==NULL||Output_11==NULL||Output_12==NULL){
     printf("Error Allocating CNN output buffers");
@@ -185,7 +182,6 @@ int start()
 		printf("%45s: Cycles: %10d, Operations: %10d, Operations/Cycle: %f\n", "Total", TotalCycles, TotalOper, ((float) TotalOper)/ TotalCycles);
 		printf("\n");
 	}
-  printf("%45s Cycles: %10d\n");
   #endif
   pmsis_exit(0);
 #endif

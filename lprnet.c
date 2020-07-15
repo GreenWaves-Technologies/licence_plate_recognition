@@ -51,11 +51,14 @@ static void RunNetwork()
 #endif
 	__PREFIX(CNN)(Input_1, Output_1);
 	printf("Runner completed\n");
-	int max_prob, predicted_char = 70;
+	int max_prob;
+	int predicted_char = 70;
+	printf("OUTPUT: \n");
 	for (int i=0; i<88; i++){
+		max_prob = 0x80000000;
 		for (int j=0; j<71; j++){
-			if (Output_1[i*71+j]>max_prob){
-				max_prob = Output_1[i*71+j];
+			if (Output_1[i+j*88]>max_prob){
+				max_prob = Output_1[i+j*88];
 				predicted_char = j;
 			}
 		}
