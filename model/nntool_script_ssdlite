@@ -4,8 +4,9 @@ freeze output_2
 adjust
 fusions --scale8
 imageformat input_1 rgb888 offset_int8
-#nodeoption 2 PARALLELFEATURES 0
-#nodeoption 3 PARALLELFEATURES 0
+nodeoption input_1 EXTERN_INPUT_POINTER 1
+nodeoption 2 PARALLELFEATURES 0
+nodeoption 3 PARALLELFEATURES 0
 nodeoption 6 PARALLELFEATURES 0
 nodeoption 13 PARALLELFEATURES 0
 ################ Eric Options ################
@@ -14,8 +15,6 @@ nodeoption 49 OUT_EXEC_MEM_LOC AT_MEM_L3_HRAM
 #set graph_size_opt 2
 #set graph_noinline_node true
 ##############################################
-set l3_ram_ext_managed true
-set default_input_exec_location "AT_MEM_L3_HRAM"
 set graph_reorder_constant_in true
 set graph_produce_node_names true
 set graph_produce_operinfos true
