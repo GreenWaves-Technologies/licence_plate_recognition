@@ -32,29 +32,13 @@ AT_HYPERFLASH_FS_EXT_ADDR_TYPE __PREFIX(_L3_Flash) = 0;
 typedef signed char IMAGE_IN_T;
 #ifdef __EMUL__
   char *ImageName;
-  L2_MEM IMAGE_IN_T Input_1[AT_INPUT_SIZE];
-#else
-  #ifdef PERF
+#endif
+#ifdef PERF
   L2_MEM rt_perf_t *cluster_perf;
-  #endif
-  struct pi_device HyperRam;
-  static uint32_t l3_buff;
-  L2_MEM IMAGE_IN_T *Input_1;
 #endif
 
 L2_MEM char *Output_1;
 L2_MEM char *Output_2;
-/*L2_MEM char *Output_3;
-L2_MEM char *Output_4;
-L2_MEM char *Output_5;
-L2_MEM char *Output_6;
-L2_MEM char *Output_7;
-L2_MEM char *Output_8;
-L2_MEM char *Output_9;
-L2_MEM char *Output_10;
-L2_MEM char *Output_11;
-L2_MEM char *Output_12;
-*/
 
 static void RunNetwork()
 {
@@ -65,9 +49,9 @@ static void RunNetwork()
   gap_cl_resethwtimer();
 #endif
 #ifndef __EMUL__
-  __PREFIX(CNN)(l3_buff, Output_1, Output_2);//, Output_3, Output_4, Output_5, Output_6, Output_7, Output_8, Output_9, Output_10, Output_11, Output_12);
+  __PREFIX(CNN)(Output_1, Output_2);
 #else
-  __PREFIX(CNN)(Input_1, Output_1, Output_2);//, Output_3, Output_4, Output_5, Output_6, Output_7, Output_8, Output_9, Output_10, Output_11, Output_12);
+  __PREFIX(CNN)(Output_1, Output_2);
 #endif 
   printf("Runner completed\n");
   printf("\n");
@@ -85,41 +69,18 @@ static void RunNetwork()
 
 int start()
 {
+
+  // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
+  if (__PREFIX(CNN_Construct)())
+  {
+    printf("Graph constructor exited with an error\n");
+    return 1;
+  }
+  
 #ifndef __EMUL__
   char *ImageName = __XSTR(AT_IMAGE);
   pi_freq_set(PI_FREQ_DOMAIN_CL,CL_FREQ);
   pi_freq_set(PI_FREQ_DOMAIN_FC,FC_FREQ);
-
-/*---------------------- Init & open ram ----------------------------*/
-  struct pi_hyperram_conf hyper_conf;
-  pi_hyperram_conf_init(&hyper_conf);
-  pi_open_from_conf(&HyperRam, &hyper_conf);
-  if (pi_ram_open(&HyperRam))
-  {
-    printf("Error ram open !\n");
-    pmsis_exit(-3);
-  }
-
-  if (pi_ram_alloc(&HyperRam, &l3_buff, (uint32_t) AT_INPUT_SIZE))
-  {
-    printf("Ram malloc failed !\n");
-    pmsis_exit(-4);
-  }
-/*------- Allocate L2 input buffer [preallocated in emul] -----------*/
-  uint8_t* Input_1 = (uint8_t*) pmsis_l2_malloc(AT_INPUT_SIZE*sizeof(char));
-#endif
-
-/* -------------------- Read Image from bridge ---------------------*/
-  printf("Reading image\n");
-  if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH, AT_INPUT_HEIGHT, AT_INPUT_COLORS, Input_1, AT_INPUT_SIZE*sizeof(unsigned char), IMGIO_OUTPUT_CHAR, 0)) {
-    printf("Failed to load image %s\n", ImageName);
-    return 1;
-  }
-  printf("Finished reading image\n");
-
-#ifndef __EMUL__
-  pi_ram_write(&HyperRam, (l3_buff), Input_1, (uint32_t) AT_INPUT_SIZE);
-  pmsis_l2_malloc_free(Input_1, AT_INPUT_SIZE*sizeof(char));
 
 /*-----------------------OPEN THE CLUSTER--------------------------*/
   struct pi_device cluster_dev;
@@ -134,7 +95,7 @@ int start()
     printf("pi_cluster_task alloc Error!\n");
     pmsis_exit(-1);
   }
-  printf("Stack size is %d and %d\n",STACK_SIZE,SLAVE_STACK_SIZE );
+  PRINTF("Stack size is %d and %d\n",STACK_SIZE,SLAVE_STACK_SIZE );
   memset(task, 0, sizeof(struct pi_cluster_task));
   task->entry = &RunNetwork;
   task->stack_size = STACK_SIZE;
@@ -142,7 +103,6 @@ int start()
   task->arg = NULL;
 #endif
 
-  printf("Constructor\n");
   //Allocate output buffers:
   Output_1  = (unsigned char*)AT_L2_ALLOC(0, 1554*2*sizeof(unsigned char));
   Output_2  = (unsigned char*)AT_L2_ALLOC(0, 1554*4*sizeof(unsigned char));
@@ -152,14 +112,14 @@ int start()
     return 1;
   }
 
-  // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
-  if (__PREFIX(CNN_Construct)())
-  {
-    printf("Graph constructor exited with an error\n");
+/* -------------------- Read Image from bridge ---------------------*/
+  printf("Reading image\n");
+  if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH, AT_INPUT_HEIGHT, AT_INPUT_COLORS, Input_1, AT_INPUT_SIZE*sizeof(unsigned char), IMGIO_OUTPUT_CHAR, 0)) {
+    printf("Failed to load image %s\n", ImageName);
     return 1;
   }
+  PRINTF("Finished reading image\n");
 
-  printf("Call cluster\n");
 #ifndef __EMUL__
   // Execute the function "RunNetwork" on the cluster.
   pi_cluster_send_task_to_cl(&cluster_dev, task);
