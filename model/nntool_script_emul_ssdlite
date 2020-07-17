@@ -1,6 +1,4 @@
 set debug true
-freeze output_1
-freeze output_2
 adjust
 fusions --scale8
 imageformat input_1 rgb888 offset_int8

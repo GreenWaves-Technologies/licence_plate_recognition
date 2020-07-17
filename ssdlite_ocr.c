@@ -69,13 +69,6 @@ static void RunNetwork()
 
 int start()
 {
-
-  // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
-  if (__PREFIX(CNN_Construct)())
-  {
-    printf("Graph constructor exited with an error\n");
-    return 1;
-  }
   
 #ifndef __EMUL__
   char *ImageName = __XSTR(AT_IMAGE);
@@ -88,6 +81,13 @@ int start()
   pi_cluster_conf_init(&conf);
   pi_open_from_conf(&cluster_dev, (void *)&conf);
   pi_cluster_open(&cluster_dev);
+  
+  // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
+  if (__PREFIX(CNN_Construct)())
+  {
+    printf("Graph constructor exited with an error\n");
+    return 1;
+  }
 
 /*--------------------------TASK SETUP------------------------------*/
   struct pi_cluster_task *task = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
