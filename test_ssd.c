@@ -24,28 +24,7 @@ L2_MEM rt_perf_t *cluster_perf;
 static void RunNetwork()
 {
   printf("Running on cluster\n");
-#ifdef PERF
-  printf("Start timer\n");
-  gap_cl_starttimer();
-  gap_cl_resethwtimer();
-#endif
-#ifndef __EMUL__
   __PREFIX(CNN)(Output_1, Output_2);
-#else
-  __PREFIX(CNN)(Output_1, Output_2);
-#endif 
-  printf("Runner completed\n");
-  printf("\n");
-  printf("\n\n\n");
-  printf("Output_1:\t");
-  for (int i=0; i<1554*2; i++){
-    printf("%d, ", Output_1[i]);
-  }
-  printf("\n\n\n");
-  printf("Output_2:\t");
-  for (int i=0; i<1554*4; i++){
-    printf("%d, ", Output_2[i]);
-  }
 }
 
 int start()
@@ -70,7 +49,7 @@ int start()
   }
   PRINTF("Stack size is %d and %d\n",STACK_SIZE,SLAVE_STACK_SIZE );
   memset(task, 0, sizeof(struct pi_cluster_task));
-  task->entry = &RunNetwork;
+  task->entry = &RunNetwork; //without this line it works
   task->stack_size = STACK_SIZE;
   task->slave_stack_size = SLAVE_STACK_SIZE;
   task->arg = NULL;
