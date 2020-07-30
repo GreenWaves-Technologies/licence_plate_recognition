@@ -36,9 +36,6 @@ typedef signed char IMAGE_IN_T;
 #ifdef __EMUL__
   char *ImageName;
 #endif
-#ifdef PERF
-  L2_MEM rt_perf_t *cluster_perf;
-#endif
 
 L2_MEM char *Output_1;
 L2_MEM char *Output_2;

@@ -43,10 +43,6 @@ signed char Output_1[71*88];
 typedef signed char IMAGE_IN_T;
 unsigned char Input_1[AT_INPUT_SIZE];
 
-#ifdef PERF
-L2_MEM rt_perf_t *cluster_perf;
-#endif
-
 static void RunNetwork()
 {
 #ifdef PERF
