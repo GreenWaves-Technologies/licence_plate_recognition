@@ -16,6 +16,12 @@
 #define __XSTR(__s) __STR(__s)
 #define __STR(__s) #__s
 
+#ifdef SILENT
+	#define PRINTF(...) ((void) 0)
+#else
+	#define PRINTF printf
+#endif
+
 #ifdef __EMUL__
 char *ImageName;
 #ifdef PERF
@@ -43,17 +49,16 @@ L2_MEM rt_perf_t *cluster_perf;
 
 static void RunNetwork()
 {
-	printf("Running on cluster\n");
 #ifdef PERF
-	printf("Start timer\n");
+	PRINTF("Start timer\n");
 	gap_cl_starttimer();
 	gap_cl_resethwtimer();
 #endif
 	__PREFIX(CNN)(Input_1, Output_1);
-	printf("Runner completed\n");
+	PRINTF("Runner completed\n");
 	int max_prob;
 	int predicted_char = 70;
-	printf("OUTPUT: \n");
+	PRINTF("OUTPUT: \n");
 	for (int i=0; i<88; i++){
 		max_prob = 0x80000000;
 		for (int j=0; j<71; j++){
@@ -63,16 +68,21 @@ static void RunNetwork()
 			}
 		}
 		if (predicted_char==70) continue;
-		printf("%s, ", CHAR_DICT[predicted_char]);
+		PRINTF("%s, ", CHAR_DICT[predicted_char]);
 	}
-	printf("\n");
+	PRINTF("\n");
 }
 
 int start()
 {
-	printf("Entering main controller\n");
+	PRINTF("Entering main controller\n");
 	
 #ifndef __EMUL__
+	#ifdef MEASUREMENTS
+    pi_gpio_pin_configure(NULL, PI_GPIO_A0_PAD_8_A4, PI_GPIO_OUTPUT);
+    pi_gpio_pin_write(NULL, PI_GPIO_A0_PAD_8_A4, 0);
+    #endif
+
 	char *ImageName = __XSTR(AT_IMAGE);
 	struct pi_device cluster_dev;
 	struct pi_cluster_task *task;
@@ -81,8 +91,8 @@ int start()
 	pi_cluster_conf_init(&conf);
 	pi_open_from_conf(&cluster_dev, (void *)&conf);
 	pi_cluster_open(&cluster_dev);
-	pi_freq_set(PI_FREQ_DOMAIN_CL,175000000);
-	pi_freq_set(PI_FREQ_DOMAIN_FC,250000000);
+	pi_freq_set(PI_FREQ_DOMAIN_CL, FREQ_CL*1000*1000);
+	pi_freq_set(PI_FREQ_DOMAIN_FC, FREQ_FC*1000*1000);
 	task = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
 	if (!task) {
 		printf("failed to allocate memory for task\n");
@@ -94,7 +104,7 @@ int start()
 	task->arg = NULL;
 #endif
 
-	printf("Constructor\n");
+	PRINTF("Constructor\n");
 	// IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
 	if (__PREFIX(CNN_Construct)())
 	{
@@ -102,19 +112,29 @@ int start()
 		return 1;
 	}
 
-	printf("Reading image\n");
+	PRINTF("Reading image\n");
 	//Reading Image from Bridge
 	if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH, AT_INPUT_HEIGHT, AT_INPUT_COLORS,
 			      		  Input_1, AT_INPUT_SIZE*sizeof(IMAGE_IN_T), IMGIO_OUTPUT_CHAR, 0)) {
 		printf("Failed to load image %s\n", ImageName);
 		return 1;
 	}
-	printf("Finished reading image\n");
+	PRINTF("Finished reading image\n");
 
-	printf("Call cluster\n");
+	PRINTF("Call cluster\n");
 #ifndef __EMUL__
-	// Execute the function "RunNetwork" on the cluster.
-	pi_cluster_send_task_to_cl(&cluster_dev, task);
+	#ifdef MEASUREMENTS
+	for (int i=0; i<1000; i++){
+		pi_time_wait_us(50000);
+	    pi_gpio_pin_write(NULL, PI_GPIO_A0_PAD_8_A4, 1);
+		// Execute the function "RunNetwork" on the cluster.
+		pi_cluster_send_task_to_cl(&cluster_dev, task);
+	    pi_gpio_pin_write(NULL, PI_GPIO_A0_PAD_8_A4, 0);
+    }
+    #else
+		// Execute the function "RunNetwork" on the cluster.
+		pi_cluster_send_task_to_cl(&cluster_dev, task);
+	#endif
 #else
 	RunNetwork();
 #endif
@@ -139,14 +159,14 @@ int start()
 #ifndef __EMUL__
 	pmsis_exit(0);
 #endif
-	printf("Ended\n");
+	PRINTF("Ended\n");
 	return 0;
 }
 
 #ifndef __EMUL__
 int main(void)
 {
-    printf("\n\n\t *** NNTOOL LPRNET ***\n\n");
+    PRINTF("\n\n\t *** NNTOOL LPRNET ***\n\n");
   	return pmsis_kickoff((void *) start);
 }
 #else
@@ -154,11 +174,11 @@ int main(int argc, char *argv[])
 {
     if (argc < 2)
     {
-        printf("Usage: mnist [image_file]\n");
+        PRINTF("Usage: mnist [image_file]\n");
         exit(-1);
     }
     ImageName = argv[1];
-    printf("\n\n\t *** NNTOOL LPRNET emul ***\n\n");
+    PRINTF("\n\n\t *** NNTOOL LPRNET emul ***\n\n");
     start();
     return 0;
 }

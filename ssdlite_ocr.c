@@ -16,6 +16,12 @@
 #define __XSTR(__s) __STR(__s)
 #define __STR(__s) #__s
 
+#ifdef SILENT
+  #define PRINTF(...) ((void) 0)
+#else
+  #define PRINTF printf
+#endif
+
 #define FIX2FP(Val, Precision)    ((float) (Val) / (float) (1<<(Precision)))
 
 #define AT_INPUT_SIZE (AT_INPUT_WIDTH*AT_INPUT_HEIGHT*AT_INPUT_COLORS)
@@ -23,9 +29,6 @@
 #ifndef STACK_SIZE
 #define STACK_SIZE     2048
 #endif
-
-#define CL_FREQ 175*1000*1000
-#define FC_FREQ 250*1000*1000
 
 AT_HYPERFLASH_FS_EXT_ADDR_TYPE __PREFIX(_L3_Flash) = 0;
 
@@ -42,38 +45,27 @@ L2_MEM char *Output_2;
 
 static void RunNetwork()
 {
-  printf("Running on cluster\n");
+  PRINTF("Running on cluster\n");
 #ifdef PERF
   printf("Start timer\n");
   gap_cl_starttimer();
   gap_cl_resethwtimer();
 #endif
-#ifndef __EMUL__
   __PREFIX(CNN)(Output_1, Output_2);
-#else
-  __PREFIX(CNN)(Output_1, Output_2);
-#endif 
-  printf("Runner completed\n");
-  printf("\n");
-  printf("\n\n\n");
-  printf("Output_1:\t");
-  for (int i=0; i<1554*2; i++){
-    printf("%d, ", Output_1[i]);
-  }
-  printf("\n\n\n");
-  printf("Output_2:\t");
-  for (int i=0; i<1554*4; i++){
-    printf("%d, ", Output_2[i]);
-  }
 }
 
 int start()
 {
   
 #ifndef __EMUL__
+  #ifdef MEASUREMENTS
+  pi_gpio_pin_configure(NULL, PI_GPIO_A0_PAD_8_A4, PI_GPIO_OUTPUT);
+  pi_gpio_pin_write(NULL, PI_GPIO_A0_PAD_8_A4, 0);
+  #endif
+
   char *ImageName = __XSTR(AT_IMAGE);
-  pi_freq_set(PI_FREQ_DOMAIN_CL,CL_FREQ);
-  pi_freq_set(PI_FREQ_DOMAIN_FC,FC_FREQ);
+  pi_freq_set(PI_FREQ_DOMAIN_CL, FREQ_CL*1000*1000);
+  pi_freq_set(PI_FREQ_DOMAIN_FC, FREQ_FC*1000*1000);
 
 /*-----------------------OPEN THE CLUSTER--------------------------*/
   struct pi_device cluster_dev;
@@ -81,13 +73,6 @@ int start()
   pi_cluster_conf_init(&conf);
   pi_open_from_conf(&cluster_dev, (void *)&conf);
   pi_cluster_open(&cluster_dev);
-  
-  // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
-  if (__PREFIX(CNN_Construct)())
-  {
-    printf("Graph constructor exited with an error\n");
-    return 1;
-  }
 
 /*--------------------------TASK SETUP------------------------------*/
   struct pi_cluster_task *task = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
@@ -103,17 +88,24 @@ int start()
   task->arg = NULL;
 #endif
 
+  // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
+  if (__PREFIX(CNN_Construct)())
+  {
+    printf("Graph constructor exited with an error\n");
+    return 1;
+  }
+
   //Allocate output buffers:
   Output_1  = (unsigned char*)AT_L2_ALLOC(0, 1554*2*sizeof(unsigned char));
   Output_2  = (unsigned char*)AT_L2_ALLOC(0, 1554*4*sizeof(unsigned char));
 
-  if(Output_1==NULL||Output_2==NULL){//||Output_3==NULL||Output_4==NULL||Output_5==NULL||Output_6==NULL||Output_7==NULL||Output_8==NULL||Output_9==NULL||Output_10==NULL||Output_11==NULL||Output_12==NULL){
+  if(Output_1==NULL||Output_2==NULL){
     printf("Error Allocating CNN output buffers");
     return 1;
   }
 
 /* -------------------- Read Image from bridge ---------------------*/
-  printf("Reading image\n");
+  PRINTF("Reading image\n");
   if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH, AT_INPUT_HEIGHT, AT_INPUT_COLORS, Input_1, AT_INPUT_SIZE*sizeof(unsigned char), IMGIO_OUTPUT_CHAR, 0)) {
     printf("Failed to load image %s\n", ImageName);
     return 1;
@@ -121,8 +113,18 @@ int start()
   PRINTF("Finished reading image\n");
 
 #ifndef __EMUL__
-  // Execute the function "RunNetwork" on the cluster.
-  pi_cluster_send_task_to_cl(&cluster_dev, task);
+  #ifdef MEASUREMENTS
+  for (int i=0; i<1000; i++){
+    pi_time_wait_us(50000);
+    pi_gpio_pin_write(NULL, PI_GPIO_A0_PAD_8_A4, 1);
+    // Execute the function "RunNetwork" on the cluster.
+    pi_cluster_send_task_to_cl(&cluster_dev, task);
+    pi_gpio_pin_write(NULL, PI_GPIO_A0_PAD_8_A4, 0);
+  }
+  #else
+    // Execute the function "RunNetwork" on the cluster.
+    pi_cluster_send_task_to_cl(&cluster_dev, task);
+  #endif
 #else
   RunNetwork();
 #endif
@@ -146,14 +148,14 @@ int start()
   pmsis_exit(0);
 #endif
 
-  printf("Ended\n");
+  PRINTF("Ended\n");
   return 0;
 }
 
 #ifndef __EMUL__
 int main(void)
 {
-  printf("\n\n\t *** OCR SSD ***\n\n");
+  PRINTF("\n\n\t *** OCR SSD ***\n\n");
   return pmsis_kickoff((void *) start);
 }
 #else
@@ -161,11 +163,11 @@ int main(int argc, char *argv[])
 {
     if (argc < 2)
     {
-        printf("Usage: ./exe [image_file]\n");
+        PRINTF("Usage: ./exe [image_file]\n");
         exit(-1);
     }
     ImageName = argv[1];
-    printf("\n\n\t *** OCR SSD Emul ***\n\n");
+    PRINTF("\n\n\t *** OCR SSD Emul ***\n\n");
     start();
     return 0;
 }
