@@ -25,6 +25,7 @@ nodeoption 49 OUT_EXEC_MEM_LOC AT_MEM_L3_HRAM
 set graph_size_opt 2
 set graph_noinline_node true
 ##############################################
+#set graph_trace_exec true
 set graph_reorder_constant_in true
 set graph_produce_node_names true
 set graph_produce_operinfos true
