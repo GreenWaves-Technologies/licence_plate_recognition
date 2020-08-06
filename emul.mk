@@ -24,7 +24,7 @@ ifeq ($(MODEL),1)
 	MODEL_SUFFIX = _SQ8BIT_LPRNET_EMUL
 else
 	NNTOOL_SCRIPT=model/nntool_script_emul_ssdlite
-	TRAINED_TFLITE_MODEL=model/ssdlite_v2_quant_ocr_nopostprocess.tflite
+	TRAINED_TFLITE_MODEL=model/$(MODEL_PREFIX).tflite
 	MODEL_SUFFIX = _SQ8BIT_SSD_EMUL
 endif
 

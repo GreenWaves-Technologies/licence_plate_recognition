@@ -21,12 +21,12 @@ $(info Building $(TARGET_CHIP_FAMILY) mode with $(QUANT_BITS) bit quantization)
 
 ifeq ($(MODEL),1)
 	NNTOOL_SCRIPT=model/nntool_script_lprnet
-	TRAINED_TFLITE_MODEL=model/lprnet.tflite
+	TRAINED_TFLITE_MODEL=model/$(MODEL_PREFIX).tflite
 	MODEL_SUFFIX = _SQ8BIT_LPRNET
 	IMAGE=$(CURDIR)/images/0m_1_resized.ppm
 else
 	NNTOOL_SCRIPT=model/nntool_script_ssdlite
-	TRAINED_TFLITE_MODEL=model/ssdlite_v2_quant_ocr_nopostprocess.tflite
+	TRAINED_TFLITE_MODEL=model/$(MODEL_PREFIX).tflite
 	MODEL_SUFFIX = _SQ8BIT_SSD
 	IMAGE=$(CURDIR)/images/2m_3.ppm
 endif
