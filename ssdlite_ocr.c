@@ -11,10 +11,12 @@
 
 #include "ssdlite_ocr.h"
 #include "ssdlite_ocrKernels.h"
+#ifndef __EMUL__
 #include "pmsis.h"
 #include "bsp/bsp.h"
 #include "bsp/ram.h"
 #include "bsp/ram/hyperram.h"
+#endif
 #include "gaplib/ImgIO.h"
 
 #define __XSTR(__s) __STR(__s)
@@ -30,17 +32,16 @@
 
 #define AT_INPUT_SIZE (AT_INPUT_WIDTH*AT_INPUT_HEIGHT*AT_INPUT_COLORS)
 
-#ifndef STACK_SIZE
-#define STACK_SIZE     2048
-#endif
+#define NMAX_BB 200
 
 AT_HYPERFLASH_FS_EXT_ADDR_TYPE __PREFIX(_L3_Flash) = 0;
-struct pi_device HyperRam;
-static uint32_t l3_buff;
 
-typedef signed char IMAGE_IN_T;
 #ifdef __EMUL__
   char *ImageName;
+  uint8_t Input_1[AT_INPUT_SIZE];
+#else
+  struct pi_device HyperRam;
+  static uint32_t l3_buff;
 #endif
 
 L2_MEM bbox_t *Output_1;
@@ -69,12 +70,16 @@ static void RunNetwork()
   gap_cl_starttimer();
   gap_cl_resethwtimer();
 #endif
+#ifndef __EMUL__
   __PREFIX(CNN)(l3_buff, Output_1);
+#else
+  __PREFIX(CNN)(Input_1, Output_1);
+#endif
 }
 
 int start()
 {
-  
+
 #ifndef __EMUL__
   #ifdef MEASUREMENTS
   pi_gpio_pin_configure(NULL, PI_GPIO_A0_PAD_8_A4, PI_GPIO_OUTPUT);
@@ -96,10 +101,29 @@ int start()
     pmsis_exit(-4);
   }
 
-
-  char *ImageName = __XSTR(AT_IMAGE);
   pi_freq_set(PI_FREQ_DOMAIN_CL, FREQ_CL*1000*1000);
   pi_freq_set(PI_FREQ_DOMAIN_FC, FREQ_FC*1000*1000);
+
+
+  char *ImageName = __XSTR(AT_IMAGE);
+  //Reading Image from Bridge
+  uint8_t* Input_1 = (uint8_t*) AT_L2_ALLOC(0, AT_INPUT_SIZE*sizeof(char));
+  if(Input_1==NULL){
+    PRINTF("Error allocating image buffer\n");
+    pmsis_exit(-1);
+  }
+#endif
+/* -------------------- Read Image from bridge ---------------------*/
+  PRINTF("Reading image\n");
+  if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH, AT_INPUT_HEIGHT, AT_INPUT_COLORS, Input_1, AT_INPUT_SIZE*sizeof(char), IMGIO_OUTPUT_CHAR, 0)) {
+    printf("Failed to load image %s\n", ImageName);
+    return 1;
+  }
+#ifndef __EMUL__
+  pi_ram_write(&HyperRam, (l3_buff), Input_1, (uint32_t) AT_INPUT_SIZE);
+  pmsis_l2_malloc_free(Input_1, AT_INPUT_SIZE);
+  PRINTF("Finished reading image\n");
+
 
 /*-----------------------OPEN THE CLUSTER--------------------------*/
   struct pi_device cluster_dev;
@@ -122,35 +146,20 @@ int start()
   task->arg = NULL;
 #endif
 
+  //Allocate output buffers:
+  Output_1  = (short int *)AT_L2_ALLOC(0, NMAX_BB*sizeof(bbox_t));
+  if(Output_1==NULL){
+    printf("Error Allocating CNN output buffers");
+    return 1;
+  }
+
   // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
   if (__PREFIX(CNN_Construct)())
   {
     printf("Graph constructor exited with an error\n");
     return 1;
   }
-
-  //Reading Image from Bridge
-  uint8_t* Input_1 = (uint8_t*)pmsis_l2_malloc(AT_INPUT_SIZE);
-  if(Input_1==NULL){
-    PRINTF("Error allocating image buffer\n");
-    pmsis_exit(-1);
-  }
-  //Allocate output buffers:
-  Output_1  = (unsigned char*)AT_L2_ALLOC(0, 200*sizeof(bbox_t));
-  if(Output_1==NULL){
-    printf("Error Allocating CNN output buffers");
-    return 1;
-  }
-/* -------------------- Read Image from bridge ---------------------*/
-  PRINTF("Reading image\n");
-  if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH, AT_INPUT_HEIGHT, AT_INPUT_COLORS, Input_1, AT_INPUT_SIZE*sizeof(unsigned char), IMGIO_OUTPUT_CHAR, 0)) {
-    printf("Failed to load image %s\n", ImageName);
-    return 1;
-  }
-  pi_ram_write(&HyperRam, (l3_buff), Input_1, (uint32_t) AT_INPUT_SIZE);
-
-  pmsis_l2_malloc_free(Input_1, AT_INPUT_SIZE);
-  PRINTF("Finished reading image\n");
+  printf("Graph constructor was OK\n");
 
 #ifndef __EMUL__
   #ifdef MEASUREMENTS
