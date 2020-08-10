@@ -178,11 +178,8 @@ int start()
   RunNetwork();
 #endif
 
-  __PREFIX(CNN_Destruct)();
-
-  //printBboxes(&bbxs);
   printBboxes_forPython(Output_1);
-  
+
 #ifndef __EMUL__
   #ifdef PERF
 	{
@@ -199,6 +196,7 @@ int start()
   #endif
   pmsis_exit(0);
 #endif
+  __PREFIX(CNN_Destruct)();
 
   PRINTF("Ended\n");
   return 0;
