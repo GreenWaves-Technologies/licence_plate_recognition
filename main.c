@@ -12,6 +12,7 @@
 #include "main.h"
 #include "ssdlite_ocrKernels.h"
 //#include "lprnetKernels.h"
+#include "ResizeBasicKernels.h"
 
 #include "pmsis.h"
 #include "bsp/bsp.h"
@@ -71,6 +72,11 @@ static void RunSSDNetwork()
   __PREFIX1(CNN)(l3_buff, out_boxes);
 }
 
+static void Resize(KerResizeBilinear_ArgT *KerArg)
+{
+    AT_FORK(gap_ncore(), (void *) KerResizeBilinear, (void *) KerArg);
+    __CALL(KerResizeBilinear, KerArg);
+}
 
 int start()
 {
@@ -102,9 +108,18 @@ int start()
     pmsis_exit(-4);
   }
 
+/*-----------------------OPEN THE CLUSTER--------------------------*/
+  struct pi_device cluster_dev;
+  struct pi_cluster_conf conf;
+  pi_cluster_conf_init(&conf);
+  pi_open_from_conf(&cluster_dev, (void *)&conf);
+  pi_cluster_open(&cluster_dev);
+
   pi_freq_set(PI_FREQ_DOMAIN_CL, FREQ_CL*1000*1000);
   pi_freq_set(PI_FREQ_DOMAIN_FC, FREQ_FC*1000*1000);
 
+
+//------------------------- Aquisition + INFERENCE
   char *ImageName = __XSTR(AT_IMAGE);
   //Reading Image from Bridge
   uint8_t* Input_1 = (uint8_t*) AT_L2_ALLOC(0, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
@@ -133,14 +148,6 @@ int start()
   pi_ram_write(&HyperRam, l3_buff+2*AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD, Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
   pmsis_l2_malloc_free(Input_1, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
   PRINTF("Finished reading image\n");
-
-
-/*-----------------------OPEN THE CLUSTER--------------------------*/
-  struct pi_device cluster_dev;
-  struct pi_cluster_conf conf;
-  pi_cluster_conf_init(&conf);
-  pi_open_from_conf(&cluster_dev, (void *)&conf);
-  pi_cluster_open(&cluster_dev);
 
 /*--------------------------TASK SETUP------------------------------*/
   struct pi_cluster_task *task = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
@@ -173,37 +180,67 @@ int start()
 
   // Execute the function "RunNetwork" on the cluster.
   pi_cluster_send_task_to_cl(&cluster_dev, task);
+  __PREFIX1(CNN_Destruct)();
 
   bbox_t plate_bbox = out_boxes[0];
 
   if(plate_bbox.alive){
-	__PREFIX1(CNN_Destruct)();
-	printf("Graph Destructed\n");
- 	int box_x = (int)(FIX2FP(plate_bbox.x,14)*320);
+   	int box_x = (int)(FIX2FP(plate_bbox.x,14)*320);
     int box_y = (int)(FIX2FP(plate_bbox.y,14)*240);
- 	int box_w = (int)(FIX2FP(plate_bbox.w,14)*320);
+   	int box_w = (int)(FIX2FP(plate_bbox.w,14)*320);
     int box_h = (int)(FIX2FP(plate_bbox.h,14)*240);
-  	PRINTF("BBOX: %d %d %d %d\n", box_x, box_y, box_w, box_h);
-	uint8_t* img_plate = (uint8_t *) pmsis_l2_malloc(box_w*box_h*sizeof(char));
-	if(img_plate==NULL){
-	  PRINTF("Error allocating image buffer\n");
-	  pmsis_exit(-1);
-	}
+    PRINTF("BBOX (x, y, w, h): (%d, %d, %d, %d)\n", box_x, box_y, box_w, box_h);
+  	uint8_t* img_plate         = (uint8_t *) pmsis_l2_malloc(box_w*box_h*sizeof(char));
+    uint8_t* img_plate_resized = (uint8_t *) pmsis_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*sizeof(char));
+  	if(img_plate==NULL || img_plate_resized==NULL){
+  	  PRINTF("Error allocating image plate buffers\n");
+  	  pmsis_exit(-1);
+  	}
+    pi_task_t end_copy;
+    PRINTF("Start Copy 2d\n");
+    pi_ram_copy_2d_async(&HyperRam, (uint32_t) (l3_buff+box_y*AT_INPUT_WIDTH_SSD+box_x), (img_plate), \
+               (uint32_t) box_w*box_h, (uint32_t) AT_INPUT_WIDTH_SSD, (uint32_t) box_w, 1, pi_task_block(&end_copy));
+    pi_task_wait_on(&end_copy);
+    printf("Ended copy\n");
 
-	pi_task_t end_copy;
-	PRINTF("Start Copy 2d\n");
-	pi_ram_copy_2d_async(&HyperRam, (uint32_t) (l3_buff+box_y*AT_INPUT_WIDTH_SSD+box_x), (img_plate), \
-						 (uint32_t) box_w*box_h, (uint32_t) AT_INPUT_WIDTH_SSD, (uint32_t) box_w, 1, pi_task_block(&end_copy));
-	pi_task_wait_on(&end_copy);
-	printf("Ended copy\n");
-    
-	buffer_plate.data = img_plate;
-	buffer_plate.stride = 0;
-	pi_buffer_init(&buffer_plate, PI_BUFFER_TYPE_L2, img_plate);//+AT_INPUT_WIDTH*2+2);
-	pi_buffer_set_stride(&buffer_plate, 0);
-	#ifdef HAVE_LCD
-		pi_display_write(&ili, &buffer_plate, 0, 0, box_w, box_h);
-	#endif
+    /*--------------------------TASK SETUP------------------------------*/
+    struct pi_cluster_task *task_resize = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
+    if(task_resize==NULL) {
+      printf("pi_cluster_task alloc Error!\n");
+      pmsis_exit(-1);
+    }
+    PRINTF("Stack size is %d and %d\n",1024, 512 );
+    memset(task_resize, 0, sizeof(struct pi_cluster_task));
+    task_resize->entry = &Resize;
+    task_resize->stack_size = 1024;
+    task_resize->slave_stack_size = 512;
+
+    KerResizeBilinear_ArgT *ResizeArg;
+      ResizeArg->In             = img_plate;
+      ResizeArg->Win            = box_w;
+      ResizeArg->Hin            = box_h;
+      ResizeArg->Out            = img_plate_resized;
+      ResizeArg->Wout           = AT_INPUT_WIDTH_LPR;
+      ResizeArg->Hout           = AT_INPUT_HEIGHT_LPR;
+      ResizeArg->HTileOut       = box_h;
+      ResizeArg->FirstLineIndex = 0;
+    task_resize->arg = &ResizeArg;
+    pi_cluster_send_task_to_cl(&cluster_dev, task_resize);
+    printf("Here %d, %d\n", AT_INPUT_HEIGHT_LPR, AT_INPUT_WIDTH_LPR);
+
+    for (int i=0; i<AT_INPUT_HEIGHT_LPR; i++){
+      for (int j=0; j<AT_INPUT_WIDTH_LPR; j++){
+        printf("%d, ", img_plate_resized[i*AT_INPUT_WIDTH_LPR+j]);
+      }
+    }
+  	buffer_plate.data = img_plate_resized;
+  	buffer_plate.stride = 0;
+  	pi_buffer_init(&buffer_plate, PI_BUFFER_TYPE_L2, img_plate_resized);//+AT_INPUT_WIDTH*2+2);
+  	pi_buffer_set_stride(&buffer_plate, 0);
+  	#ifdef HAVE_LCD
+      writeFillRect(&ili, 0, 0, 240, 320, 0xFFFF);
+  		pi_display_write(&ili, &buffer_plate, 0, 0, AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR);
+  	#endif
   }
   while(1);
 
