@@ -7,8 +7,8 @@ nodeoption 5 PARALLELFEATURES 0
 nodeoption 9 PARALLELFEATURES 0
 nodeoption 13 PARALLELFEATURES 0
 set l2_ram_ext_managed false
-set graph_produce_node_names true
-set graph_produce_operinfos true
-set graph_monitor_cycles true
+#set graph_produce_node_names true
+#set graph_produce_operinfos true
+#set graph_monitor_cycles true
 set graph_const_exec_from_flash true
 save_state

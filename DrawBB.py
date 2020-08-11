@@ -18,7 +18,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 #INTPUT_FILE = "test_images/test_000_0000084_resized_rgb.ppm"
-INTPUT_FILE = "images/2m_3.ppm"
+INTPUT_FILE = "images/china_1.ppm"
 #INTPUT_FILE = "output0.ppm"
 OUTPUT_FILE = "result.png"
 
@@ -31,8 +31,7 @@ draw = ImageDraw.Draw(img_in)
 
 # Copy Paste code here:
 #draw.rectangle((ymin, xmin, ymax, xmax), outline=(255, 255, 0))
-draw.rectangle((111,154,165,171), outline=(255, 255, 0))
-draw.rectangle((1360,0,1360,0), outline=(255, 255, 0))
+draw.rectangle((76, 138, 76+228, 138+80), outline=(255, 255, 0))
 
 
 ################################

@@ -29,7 +29,7 @@ char *ImageName;
 #endif
 #endif
 
-#define AT_INPUT_SIZE (AT_INPUT_WIDTH*AT_INPUT_HEIGHT*AT_INPUT_COLORS)
+#define AT_INPUT_SIZE (AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*AT_INPUT_COLORS_LPR)
 
 #ifndef STACK_SIZE
 #define STACK_SIZE     2048 
@@ -110,7 +110,7 @@ int start()
 
 	PRINTF("Reading image\n");
 	//Reading Image from Bridge
-	if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH, AT_INPUT_HEIGHT, AT_INPUT_COLORS,
+	if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR, AT_INPUT_COLORS_LPR,
 			      		  Input_1, AT_INPUT_SIZE*sizeof(IMAGE_IN_T), IMGIO_OUTPUT_CHAR, 0)) {
 		printf("Failed to load image %s\n", ImageName);
 		return 1;

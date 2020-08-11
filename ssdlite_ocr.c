@@ -30,7 +30,7 @@
 
 #define FIX2FP(Val, Precision)    ((float) (Val) / (float) (1<<(Precision)))
 
-#define AT_INPUT_SIZE (AT_INPUT_WIDTH*AT_INPUT_HEIGHT*AT_INPUT_COLORS)
+#define AT_INPUT_SIZE (AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*AT_INPUT_COLORS_SSD)
 
 #define NMAX_BB 200
 
@@ -115,7 +115,7 @@ int start()
 #endif
 /* -------------------- Read Image from bridge ---------------------*/
   PRINTF("Reading image\n");
-  if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH, AT_INPUT_HEIGHT, AT_INPUT_COLORS, Input_1, AT_INPUT_SIZE*sizeof(char), IMGIO_OUTPUT_CHAR, 0)) {
+  if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD, AT_INPUT_COLORS_SSD, Input_1, AT_INPUT_SIZE*sizeof(char), IMGIO_OUTPUT_CHAR, 0)) {
     printf("Failed to load image %s\n", ImageName);
     return 1;
   }
@@ -194,11 +194,12 @@ int start()
 		printf("\n");
 	}
   #endif
-  pmsis_exit(0);
 #endif
   __PREFIX(CNN_Destruct)();
-
   PRINTF("Ended\n");
+#ifndef __EMUL__
+  pmsis_exit(0);
+#endif
   return 0;
 }
 

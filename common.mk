@@ -4,16 +4,15 @@
 # This software may be modified and distributed under the terms
 # of the BSD license.  See the LICENSE file for details.
 
-MODEL?=2
+MODEL?=0
 
-ifeq ($(MODEL),1)
-	MODEL_PREFIX=lprnet
-	AT_INPUT_WIDTH=94
-	AT_INPUT_HEIGHT=24
-	AT_INPUT_COLORS=3
-else
-	MODEL_PREFIX=ssdlite_ocr
-	AT_INPUT_WIDTH=320
-	AT_INPUT_HEIGHT=240
-	AT_INPUT_COLORS=3
-endif
+MODEL_PREFIX_LPR=lprnet
+MODEL_PREFIX_SSD=ssdlite_ocr
+
+AT_INPUT_WIDTH_LPR=94
+AT_INPUT_HEIGHT_LPR=24
+AT_INPUT_COLORS_LPR=3
+
+AT_INPUT_WIDTH_SSD=320
+AT_INPUT_HEIGHT_SSD=240
+AT_INPUT_COLORS_SSD=3
