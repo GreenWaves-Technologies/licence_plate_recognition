@@ -88,6 +88,12 @@ all:: model
 
 clean:: clean_model
 
+at_model_disp:: $(MODEL_BUILD) $(MODEL_GEN_EXE)
+	$(MODEL_GEN_EXE) -o $(MODEL_BUILD) -c $(MODEL_BUILD) $(MODEL_GEN_EXTRA_FLAGS) --debug=Disp
+
+at_model:: $(MODEL_BUILD) $(MODEL_GEN_EXE)
+	$(MODEL_GEN_EXE) -o $(MODEL_BUILD) -c $(MODEL_BUILD) $(MODEL_GEN_EXTRA_FLAGS)
+
 include common/model_rules.mk
 $(info APP_SRCS... $(APP_SRCS))
 $(info APP_CFLAGS... $(APP_CFLAGS))

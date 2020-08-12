@@ -104,10 +104,16 @@ int start()
   pi_freq_set(PI_FREQ_DOMAIN_CL, FREQ_CL*1000*1000);
   pi_freq_set(PI_FREQ_DOMAIN_FC, FREQ_FC*1000*1000);
 
+/*-----------------------OPEN THE CLUSTER--------------------------*/
+  struct pi_device cluster_dev;
+  struct pi_cluster_conf conf;
+  pi_cluster_conf_init(&conf);
+  pi_open_from_conf(&cluster_dev, (void *)&conf);
+  pi_cluster_open(&cluster_dev);
 
   char *ImageName = __XSTR(AT_IMAGE);
   //Reading Image from Bridge
-  uint8_t* Input_1 = (uint8_t*) AT_L2_ALLOC(0, AT_INPUT_SIZE*sizeof(char));
+  uint8_t* Input_1 = (uint8_t*) AT_L2_ALLOC(0, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
   if(Input_1==NULL){
     PRINTF("Error allocating image buffer\n");
     pmsis_exit(-1);
@@ -115,22 +121,16 @@ int start()
 #endif
 /* -------------------- Read Image from bridge ---------------------*/
   PRINTF("Reading image\n");
-  if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD, AT_INPUT_COLORS_SSD, Input_1, AT_INPUT_SIZE*sizeof(char), IMGIO_OUTPUT_CHAR, 0)) {
+  if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD, 1, Input_1, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char), IMGIO_OUTPUT_CHAR, 0)) {
     printf("Failed to load image %s\n", ImageName);
     return 1;
   }
 #ifndef __EMUL__
-  pi_ram_write(&HyperRam, (l3_buff), Input_1, (uint32_t) AT_INPUT_SIZE);
-  pmsis_l2_malloc_free(Input_1, AT_INPUT_SIZE);
+  pi_ram_write(&HyperRam, l3_buff                                         , Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
+  pi_ram_write(&HyperRam, l3_buff+AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD  , Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
+  pi_ram_write(&HyperRam, l3_buff+2*AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD, Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
+  pmsis_l2_malloc_free(Input_1, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
   PRINTF("Finished reading image\n");
-
-
-/*-----------------------OPEN THE CLUSTER--------------------------*/
-  struct pi_device cluster_dev;
-  struct pi_cluster_conf conf;
-  pi_cluster_conf_init(&conf);
-  pi_open_from_conf(&cluster_dev, (void *)&conf);
-  pi_cluster_open(&cluster_dev);
 
 /*--------------------------TASK SETUP------------------------------*/
   struct pi_cluster_task *task = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
@@ -147,7 +147,7 @@ int start()
 #endif
 
   //Allocate output buffers:
-  Output_1  = (short int *)AT_L2_ALLOC(0, NMAX_BB*sizeof(bbox_t));
+  Output_1  = (short int *)AT_L2_ALLOC(0, 300*sizeof(bbox_t));
   if(Output_1==NULL){
     printf("Error Allocating CNN output buffers");
     return 1;
@@ -178,8 +178,6 @@ int start()
   RunNetwork();
 #endif
 
-  printBboxes_forPython(Output_1);
-
 #ifndef __EMUL__
   #ifdef PERF
 	{
@@ -196,6 +194,7 @@ int start()
   #endif
 #endif
   __PREFIX(CNN_Destruct)();
+  printBboxes_forPython(Output_1);
   PRINTF("Ended\n");
 #ifndef __EMUL__
   pmsis_exit(0);
