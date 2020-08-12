@@ -74,8 +74,8 @@ static void RunSSDNetwork()
 
 static void Resize(KerResizeBilinear_ArgT *KerArg)
 {
+    PRINTF("Resizing...\n");
     AT_FORK(gap_ncore(), (void *) KerResizeBilinear, (void *) KerArg);
-    __CALL(KerResizeBilinear, KerArg);
 }
 
 int start()
@@ -215,28 +215,23 @@ int start()
     task_resize->stack_size = 1024;
     task_resize->slave_stack_size = 512;
 
-    KerResizeBilinear_ArgT *ResizeArg;
-      ResizeArg->In             = img_plate;
-      ResizeArg->Win            = box_w;
-      ResizeArg->Hin            = box_h;
-      ResizeArg->Out            = img_plate_resized;
-      ResizeArg->Wout           = AT_INPUT_WIDTH_LPR;
-      ResizeArg->Hout           = AT_INPUT_HEIGHT_LPR;
-      ResizeArg->HTileOut       = box_h;
-      ResizeArg->FirstLineIndex = 0;
+    KerResizeBilinear_ArgT ResizeArg;
+      ResizeArg.In             = img_plate;
+      ResizeArg.Win            = box_w;
+      ResizeArg.Hin            = box_h;
+      ResizeArg.Out            = img_plate_resized;
+      ResizeArg.Wout           = AT_INPUT_WIDTH_LPR;
+      ResizeArg.Hout           = AT_INPUT_HEIGHT_LPR;
+      ResizeArg.HTileOut       = AT_INPUT_HEIGHT_LPR;
+      ResizeArg.FirstLineIndex = 0;
     task_resize->arg = &ResizeArg;
     pi_cluster_send_task_to_cl(&cluster_dev, task_resize);
-    printf("Here %d, %d\n", AT_INPUT_HEIGHT_LPR, AT_INPUT_WIDTH_LPR);
 
-    for (int i=0; i<AT_INPUT_HEIGHT_LPR; i++){
-      for (int j=0; j<AT_INPUT_WIDTH_LPR; j++){
-        printf("%d, ", img_plate_resized[i*AT_INPUT_WIDTH_LPR+j]);
-      }
-    }
   	buffer_plate.data = img_plate_resized;
   	buffer_plate.stride = 0;
   	pi_buffer_init(&buffer_plate, PI_BUFFER_TYPE_L2, img_plate_resized);//+AT_INPUT_WIDTH*2+2);
   	pi_buffer_set_stride(&buffer_plate, 0);
+
   	#ifdef HAVE_LCD
       writeFillRect(&ili, 0, 0, 240, 320, 0xFFFF);
   		pi_display_write(&ili, &buffer_plate, 0, 0, AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR);
