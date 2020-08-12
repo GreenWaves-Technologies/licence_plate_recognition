@@ -11,7 +11,7 @@
 
 #include "main.h"
 #include "ssdlite_ocrKernels.h"
-//#include "lprnetKernels.h"
+#include "lprnetKernels.h"
 #include "ResizeBasicKernels.h"
 
 #include "pmsis.h"
@@ -35,10 +35,14 @@ AT_HYPERFLASH_FS_EXT_ADDR_TYPE __PREFIX2(_L3_Flash) = 0;
 struct pi_device HyperRam;
 struct pi_device ili;
 static uint32_t l3_buff;
+uint8_t* img_plate_resized;
+signed char* out_lpr;
 static pi_buffer_t buffer;
 static pi_buffer_t buffer_plate;
 
 L2_MEM bbox_t *out_boxes;
+
+static char *CHAR_DICT [71] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "<Anhui>", "<Beijing>", "<Chongqing>", "<Fujian>", "<Gansu>", "<Guangdong>", "<Guangxi>", "<Guizhou>", "<Hainan>", "<Hebei>", "<Heilongjiang>", "<Henan>", "<HongKong>", "<Hubei>", "<Hunan>", "<InnerMongolia>", "<Jiangsu>", "<Jiangxi>", "<Jilin>", "<Liaoning>", "<Macau>", "<Ningxia>", "<Qinghai>", "<Shaanxi>", "<Shandong>", "<Shanghai>", "<Shanxi>", "<Sichuan>", "<Tianjin>", "<Tibet>", "<Xinjiang>", "<Yunnan>", "<Zhejiang>", "<police>", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "_"};
 
 #ifdef HAVE_LCD
 static int open_display(struct pi_device *device)
@@ -70,6 +74,32 @@ static void RunSSDNetwork()
   gap_cl_resethwtimer();
 #endif
   __PREFIX1(CNN)(l3_buff, out_boxes);
+}
+
+static void RunLPRNetwork()
+{
+  PRINTF("Running LPR model on cluster\n");
+#ifdef PERF
+  printf("Start timer\n");
+  gap_cl_starttimer();
+  gap_cl_resethwtimer();
+#endif
+  __PREFIX2(CNN)(img_plate_resized, out_lpr);
+  int max_prob;
+  int predicted_char = 70;
+  PRINTF("OUTPUT: \n");
+  for (int i=0; i<88; i++){
+    max_prob = 0x80000000;
+    for (int j=0; j<71; j++){
+      if (out_lpr[i+j*88]>max_prob){
+        max_prob = out_lpr[i+j*88];
+        predicted_char = j;
+      }
+    }
+    if (predicted_char==70) continue;
+    PRINTF("%s, ", CHAR_DICT[predicted_char]);
+  }
+  PRINTF("\n");
 }
 
 static void Resize(KerResizeBilinear_ArgT *KerArg)
@@ -191,7 +221,7 @@ int start()
     int box_h = (int)(FIX2FP(plate_bbox.h,14)*240);
     PRINTF("BBOX (x, y, w, h): (%d, %d, %d, %d)\n", box_x, box_y, box_w, box_h);
   	uint8_t* img_plate         = (uint8_t *) pmsis_l2_malloc(box_w*box_h*sizeof(char));
-    uint8_t* img_plate_resized = (uint8_t *) pmsis_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*sizeof(char));
+    img_plate_resized = (uint8_t *) pmsis_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*sizeof(char));
   	if(img_plate==NULL || img_plate_resized==NULL){
   	  PRINTF("Error allocating image plate buffers\n");
   	  pmsis_exit(-1);
@@ -199,7 +229,7 @@ int start()
     pi_task_t end_copy;
     PRINTF("Start Copy 2d\n");
     pi_ram_copy_2d_async(&HyperRam, (uint32_t) (l3_buff+box_y*AT_INPUT_WIDTH_SSD+box_x), (img_plate), \
-               (uint32_t) box_w*box_h, (uint32_t) AT_INPUT_WIDTH_SSD, (uint32_t) box_w, 1, pi_task_block(&end_copy));
+                         (uint32_t) box_w*box_h, (uint32_t) AT_INPUT_WIDTH_SSD, (uint32_t) box_w, 1, pi_task_block(&end_copy));
     pi_task_wait_on(&end_copy);
     printf("Ended copy\n");
 
@@ -236,6 +266,34 @@ int start()
       writeFillRect(&ili, 0, 0, 240, 320, 0xFFFF);
   		pi_display_write(&ili, &buffer_plate, 0, 0, AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR);
   	#endif
+        // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
+    if (__PREFIX2(CNN_Construct)())
+    {
+      printf("Graph constructor exited with an error\n");
+      return 1;
+    }
+    PRINTF("Graph constructor was OK\n");
+    out_lpr = (char *) pmsis_l2_malloc(71*88*sizeof(char));
+    if(out_lpr==NULL){
+      printf("out_lpr alloc Error!\n");
+      pmsis_exit(-1);
+    }
+    /*--------------------------TASK SETUP------------------------------*/
+    struct pi_cluster_task *task_recogniction = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
+    if(task_recogniction==NULL) {
+      printf("pi_cluster_task alloc Error!\n");
+      pmsis_exit(-1);
+    }
+    PRINTF("Stack size is %d and %d\n",STACK_SIZE,SLAVE_STACK_SIZE );
+    memset(task_recogniction, 0, sizeof(struct pi_cluster_task));
+    task_recogniction->entry = &RunLPRNetwork;
+    task_recogniction->stack_size = STACK_SIZE;
+    task_recogniction->slave_stack_size = SLAVE_STACK_SIZE;
+    task_recogniction->arg = NULL;
+
+    // Execute the function "RunNetwork" on the cluster.
+    pi_cluster_send_task_to_cl(&cluster_dev, task_recogniction);
+    __PREFIX2(CNN_Destruct)();
   }
   while(1);
 
