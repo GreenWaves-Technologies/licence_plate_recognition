@@ -20,19 +20,27 @@
 #include "bsp/ram/hyperram.h"
 #include "bsp/buffer.h"
 #include "bsp/display/ili9341.h"
+#include "bsp/camera.h"
+#include "bsp/camera/himax.h"
 
 #include "gaplib/ImgIO.h"
 
 #define __XSTR(__s) __STR(__s)
 #define __STR(__s) #__s
 
-#define AT_INPUT_SIZE (AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*AT_INPUT_COLORS_SSD)
-#define MAX_BB		  (300)
+#define AT_INPUT_SIZE   (AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*AT_INPUT_COLORS_SSD)
+#define MAX_BB    		  (300)
+#define CAMERA_WIDTH    (324)
+#define CAMERA_HEIGHT   (244)
+#define CAMERA_COLORS   (1)
+#define CAMERA_SIZE     (CAMERA_WIDTH*CAMERA_HEIGHT*CAMERA_COLORS)
+
 
 AT_HYPERFLASH_FS_EXT_ADDR_TYPE __PREFIX1(_L3_Flash) = 0;
 AT_HYPERFLASH_FS_EXT_ADDR_TYPE __PREFIX2(_L3_Flash) = 0;
 
 static struct pi_device dmacpy;
+struct pi_device camera;
 struct pi_device HyperRam;
 struct pi_device ili;
 static uint32_t l3_buff;
@@ -40,6 +48,7 @@ signed char * img_plate_resized;
 signed char * out_lpr;
 static pi_buffer_t buffer;
 static pi_buffer_t buffer_plate;
+static pi_task_t task_himax;
 
 signed char OUT_CHAR[100];
 
@@ -67,6 +76,16 @@ void draw_text(struct pi_device *display, const char *str, unsigned posX, unsign
     writeText(ili, str, fontsize);
 }
 #endif
+
+static int open_camera_himax(struct pi_device *device)
+{
+  struct pi_himax_conf cam_conf;
+  pi_himax_conf_init(&cam_conf);
+  pi_open_from_conf(device, &cam_conf);
+  if (pi_camera_open(device))
+    return -1;
+  return 0;
+}
 
 static void RunSSDNetwork()
 {
@@ -114,7 +133,7 @@ static void RunLPRNetwork()
   PRINTF("\n");
 #ifdef PERF
   int end = gap_cl_readhwtimer();
-  printf("SSD PERF: %d cycles\n", end - start);
+  printf("LPR PERF: %d cycles\n", end - start);
 #endif
 }
 
@@ -130,6 +149,13 @@ int start()
 	pi_gpio_pin_configure(NULL, PI_GPIO_A0_PAD_8_A4, PI_GPIO_OUTPUT);
 	pi_gpio_pin_write(NULL, PI_GPIO_A0_PAD_8_A4, 0);
   #endif
+#ifdef HAVE_HIMAX
+  int err = open_camera_himax(&camera);
+  if (err) {
+    printf("Failed to open camera\n");
+    pmsis_exit(-2);
+  }
+#endif
 #ifdef HAVE_LCD
 	if (open_display(&ili)){
 		printf("Failed to open display\n");
@@ -164,171 +190,201 @@ int start()
   pi_freq_set(PI_FREQ_DOMAIN_CL, FREQ_CL*1000*1000);
   pi_freq_set(PI_FREQ_DOMAIN_FC, FREQ_FC*1000*1000);
 
-
-//------------------------- Aquisition + INFERENCE
-  char *ImageName = __XSTR(AT_IMAGE);
-  //Reading Image from Bridge
-  uint8_t* Input_1 = (uint8_t*) pmsis_l2_malloc(AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
-  if(Input_1==NULL){
-    PRINTF("Error allocating image buffer\n");
-    pmsis_exit(-1);
-  }
-/* -------------------- Read Image from bridge ---------------------*/
-  PRINTF("Reading image\n");
-  if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD, 1, Input_1, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char), IMGIO_OUTPUT_CHAR, 0)) {
-    printf("Failed to load image %s\n", ImageName);
-    return 1;
-  }
-  buffer.data = Input_1;
-  buffer.stride = 0;
-  pi_buffer_init(&buffer, PI_BUFFER_TYPE_L2, Input_1);//+AT_INPUT_WIDTH*2+2);
-  pi_buffer_set_stride(&buffer, 0);
-  #ifdef HAVE_LCD
-	pi_display_write(&ili, &buffer, 0, 0, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD);
-  #endif
-  for(int i=0; i<AT_INPUT_HEIGHT_SSD*AT_INPUT_WIDTH_SSD; i++){
-  	Input_1[i] -= 128;
-  }
-  pi_ram_write(&HyperRam, l3_buff                                         , Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
-  pi_ram_write(&HyperRam, l3_buff+AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD  , Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
-  pi_ram_write(&HyperRam, l3_buff+2*AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD, Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
-  pmsis_l2_malloc_free(Input_1, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
-  PRINTF("Finished reading image\n");
-
-/*--------------------------TASK SETUP------------------------------*/
-  struct pi_cluster_task *task = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
-  if(task==NULL) {
-    printf("pi_cluster_task alloc Error!\n");
-    pmsis_exit(-1);
-  }
-  PRINTF("Stack size is %d and %d\n",STACK_SIZE,SLAVE_STACK_SIZE );
-  memset(task, 0, sizeof(struct pi_cluster_task));
-  task->entry = &RunSSDNetwork;
-  task->stack_size = STACK_SIZE;
-  task->slave_stack_size = SLAVE_STACK_SIZE;
-  task->arg = NULL;
-
-
-  //Allocate output buffers:
-  out_boxes = (short int *) pmsis_l2_malloc(MAX_BB*sizeof(bbox_t));
-  if(out_boxes==NULL){
-    printf("Error Allocating CNN output buffers");
-    return 1;
-  }
-
-  // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
-  if (__PREFIX1(CNN_Construct)())
+while(1) 
   {
-    printf("Graph constructor exited with an error\n");
-    return 1;
-  }
-  PRINTF("Graph constructor was OK\n");
+  //------------------------- Aquisition + INFERENCE
+    #ifdef HAVE_HIMAX
+      uint8_t* Input_1 = (uint8_t*) pmsis_l2_malloc(CAMERA_SIZE*sizeof(char));
+      // Get an image 
+      pi_camera_control(&camera, PI_CAMERA_CMD_START, 0);
+      pi_camera_capture(&camera, Input_1, CAMERA_SIZE);
+      pi_camera_control(&camera, PI_CAMERA_CMD_STOP, 0);
 
-  // Execute the function "RunNetwork" on the cluster.
-  pi_cluster_send_task_to_cl(&cluster_dev, task);
-  __PREFIX1(CNN_Destruct)();
+      // Image Cropping to [ AT_INPUT_HEIGHT_SSD x AT_INPUT_WIDTH_SSD ]
+      int ps=0;
+      for(int i =0;i<CAMERA_HEIGHT;i++){
+        for(int j=0;j<CAMERA_WIDTH;j++){
+          if (i<AT_INPUT_HEIGHT_SSD && j<AT_INPUT_WIDTH_SSD){
+            Input_1[ps] = Input_1[i*CAMERA_WIDTH+j] - 128;
+            ps++;             
+          }
+        }
+      }
+    #else
+      uint8_t* Input_1 = (uint8_t*) pmsis_l2_malloc(AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
+      char *ImageName = __XSTR(AT_IMAGE);
+      //Reading Image from Bridge
+      if(Input_1==NULL){
+        PRINTF("Error allocating image buffer\n");
+        pmsis_exit(-1);
+      }
+    /* -------------------- Read Image from bridge ---------------------*/
+      PRINTF("Reading image\n");
+      if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD, 1, Input_1, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char), IMGIO_OUTPUT_CHAR, 0)) {
+        printf("Failed to load image %s\n", ImageName);
+        return 1;
+      }
+      for(int i=0; i<AT_INPUT_HEIGHT_SSD*AT_INPUT_WIDTH_SSD; i++){
+        Input_1[i] -= 128;
+      }
+    #endif
+    #ifdef HAVE_LCD
+      buffer.data = Input_1;
+      buffer.stride = 0;
+      // WIth Himax, propertly configure the buffer to skip boarder pixels
+      pi_buffer_init(&buffer, PI_BUFFER_TYPE_L2, Input_1);
+      pi_buffer_set_stride(&buffer, 0);
+      pi_buffer_set_format(&buffer, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD, 1, PI_BUFFER_FORMAT_GRAY);
+    	pi_display_write(&ili, &buffer, 0, 0, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD);
+    #endif
+    pi_ram_write(&HyperRam, l3_buff                                         , Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
+    pi_ram_write(&HyperRam, l3_buff+AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD  , Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
+    pi_ram_write(&HyperRam, l3_buff+2*AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD, Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
+    #ifdef HAVE_HIMAX
+      pmsis_l2_malloc_free(Input_1, CAMERA_SIZE*sizeof(char));
+    #else
+      pmsis_l2_malloc_free(Input_1, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
+    #endif
+    PRINTF("Finished reading image\n");
 
-  bbox_t plate_bbox = out_boxes[0];
-
-  if(plate_bbox.alive){
-   	int box_x = (int)(FIX2FP(plate_bbox.x,14)*320);
-    int box_y = (int)(FIX2FP(plate_bbox.y,14)*240);
-   	int box_w = (int)(FIX2FP(plate_bbox.w,14)*320);
-    int box_h = (int)(FIX2FP(plate_bbox.h,14)*240);
-    PRINTF("BBOX (x, y, w, h): (%d, %d, %d, %d)\n", box_x, box_y, box_w, box_h);
-  	signed char* img_plate = (signed char *) pmsis_l2_malloc(box_w*box_h*sizeof(char));
-    img_plate_resized      = (signed char *) pmsis_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
-  	if(img_plate==NULL || img_plate_resized==NULL){
-  	  PRINTF("Error allocating image plate buffers\n");
-  	  pmsis_exit(-1);
-  	}
-    pi_task_t end_copy;
-    pi_ram_copy_2d_async(&HyperRam, (uint32_t) (l3_buff+box_y*AT_INPUT_WIDTH_SSD+box_x), (img_plate), \
-                         (uint32_t) box_w*box_h, (uint32_t) AT_INPUT_WIDTH_SSD, (uint32_t) box_w, 1, pi_task_block(&end_copy));
-    pi_task_wait_on(&end_copy);
-
-    /*--------------------------TASK SETUP------------------------------*/
-    struct pi_cluster_task *task_resize = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
-    if(task_resize==NULL) {
-      printf("pi_cluster_task alloc Error!\n");
-      pmsis_exit(-1);
+    //Allocate output buffers:
+    out_boxes = (short int *) pmsis_l2_malloc(MAX_BB*sizeof(bbox_t));
+    if(out_boxes==NULL){
+      printf("Error Allocating CNN output buffers");
+      return 1;
     }
-    PRINTF("Stack size is %d and %d\n",1024, 512 );
-    memset(task_resize, 0, sizeof(struct pi_cluster_task));
-    task_resize->entry = &Resize;
-    task_resize->stack_size = 1024;
-    task_resize->slave_stack_size = 512;
-
-    KerResizeBilinear_ArgT ResizeArg;
-      ResizeArg.In             = img_plate;
-      ResizeArg.Win            = box_w;
-      ResizeArg.Hin            = box_h;
-      ResizeArg.Out            = img_plate_resized;
-      ResizeArg.Wout           = AT_INPUT_WIDTH_LPR;
-      ResizeArg.Hout           = AT_INPUT_HEIGHT_LPR;
-      ResizeArg.HTileOut       = AT_INPUT_HEIGHT_LPR;
-      ResizeArg.FirstLineIndex = 0;
-    task_resize->arg = &ResizeArg;
-    pi_cluster_send_task_to_cl(&cluster_dev, task_resize);
-
-/*  	#ifdef HAVE_LCD
-      buffer_plate.data = img_plate_resized;
-      buffer_plate.stride = 0;
-      pi_buffer_init(&buffer_plate, PI_BUFFER_TYPE_L2, img_plate_resized);//+AT_INPUT_WIDTH*2+2);
-      pi_buffer_set_stride(&buffer_plate, 0);
-  		pi_display_write(&ili, &buffer_plate, 0, 0, AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR);
-  	#endif*/
-    pmsis_l2_malloc_free(img_plate, box_w*box_h*sizeof(char));
-    pmsis_l2_malloc_free(out_boxes, MAX_BB*sizeof(bbox_t));
-
-    /* Init & open dmacpy. */
-    struct pi_dmacpy_conf dmacpy_conf = {0};
-    pi_dmacpy_conf_init(&dmacpy_conf);
-    pi_open_from_conf(&dmacpy, &dmacpy_conf);
-    int errors = pi_dmacpy_open(&dmacpy);
-    if (errors)
-    {
-      printf("Error dmacpy open : %ld !\n", errors);
-      pmsis_exit(-3);
-    }
-    // /* Copy buffer from L2 to L2. */
-    errors = pi_dmacpy_copy(&dmacpy, (void *) img_plate_resized, (void *) img_plate_resized+AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, PI_DMACPY_L2_L2);
-    errors = pi_dmacpy_copy(&dmacpy, (void *) img_plate_resized, (void *) img_plate_resized+2*AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, PI_DMACPY_L2_L2);
-    if(errors){
-      printf("Copy from L2 to L2 failed : %ld\n", errors); pmsis_exit(-5);
-    }
-
     // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
-    if (__PREFIX2(CNN_Construct)())
+    if (__PREFIX1(CNN_Construct)())
     {
-      printf("Graph constructor exited with an error\n");
+      printf("SSD Graph constructor exited with an error\n");
       return 1;
     }
     PRINTF("Graph constructor was OK\n");
-    out_lpr = (char *) pmsis_l2_malloc(71*88*sizeof(char));
-    if(out_lpr==NULL){
-      printf("out_lpr alloc Error!\n");
-      pmsis_exit(-1);
-    }
+
     /*--------------------------TASK SETUP------------------------------*/
-    struct pi_cluster_task *task_recogniction = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
-    if(task_recogniction==NULL) {
+    struct pi_cluster_task *task = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
+    if(task==NULL) {
       printf("pi_cluster_task alloc Error!\n");
       pmsis_exit(-1);
     }
     PRINTF("Stack size is %d and %d\n",STACK_SIZE,SLAVE_STACK_SIZE );
-    memset(task_recogniction, 0, sizeof(struct pi_cluster_task));
-    task_recogniction->entry = &RunLPRNetwork;
-    task_recogniction->stack_size = STACK_SIZE;
-    task_recogniction->slave_stack_size = SLAVE_STACK_SIZE;
-    task_recogniction->arg = NULL;
-
+    memset(task, 0, sizeof(struct pi_cluster_task));
+    task->entry = &RunSSDNetwork;
+    task->stack_size = STACK_SIZE;
+    task->slave_stack_size = SLAVE_STACK_SIZE;
+    task->arg = NULL;
     // Execute the function "RunNetwork" on the cluster.
-    pi_cluster_send_task_to_cl(&cluster_dev, task_recogniction);
-    __PREFIX2(CNN_Destruct)();
-    draw_text(&ili, OUT_CHAR, box_x, box_y-10, 2);
+    pi_cluster_send_task_to_cl(&cluster_dev, task);
+
+    bbox_t plate_bbox = out_boxes[0];
+    pmsis_l2_malloc_free(task, sizeof(struct pi_cluster_task));
+    pmsis_l2_malloc_free(out_boxes, MAX_BB*sizeof(bbox_t));
+    __PREFIX1(CNN_Destruct)();
+
+    if(plate_bbox.alive){
+     	int box_x = (int)(FIX2FP(plate_bbox.x,14)*320);
+      int box_y = (int)(FIX2FP(plate_bbox.y,14)*240);
+     	int box_w = (int)(FIX2FP(plate_bbox.w,14)*320);
+      int box_h = (int)(FIX2FP(plate_bbox.h,14)*240);
+      PRINTF("BBOX (x, y, w, h): (%d, %d, %d, %d)\n", box_x, box_y, box_w, box_h);
+    	signed char* img_plate = (signed char *) pmsis_l2_malloc(box_w*box_h*sizeof(char));
+      img_plate_resized      = (signed char *) pmsis_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
+    	if(img_plate==NULL || img_plate_resized==NULL){
+    	  printf("Error allocating image plate buffers\n");
+    	  pmsis_exit(-1);
+    	}
+      pi_task_t end_copy;
+      pi_ram_copy_2d_async(&HyperRam, (uint32_t) (l3_buff+box_y*AT_INPUT_WIDTH_SSD+box_x), (img_plate), \
+                           (uint32_t) box_w*box_h, (uint32_t) AT_INPUT_WIDTH_SSD, (uint32_t) box_w, 1, pi_task_block(&end_copy));
+      pi_task_wait_on(&end_copy);
+
+      /*--------------------------TASK SETUP------------------------------*/
+      struct pi_cluster_task *task_resize = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
+      if(task_resize==NULL) {
+        printf("pi_cluster_task alloc Error!\n");
+        pmsis_exit(-1);
+      }
+      PRINTF("Stack size is %d and %d\n",1024, 512 );
+      memset(task_resize, 0, sizeof(struct pi_cluster_task));
+      task_resize->entry = &Resize;
+      task_resize->stack_size = 1024;
+      task_resize->slave_stack_size = 512;
+
+      KerResizeBilinear_ArgT ResizeArg;
+        ResizeArg.In             = img_plate;
+        ResizeArg.Win            = box_w;
+        ResizeArg.Hin            = box_h;
+        ResizeArg.Out            = img_plate_resized;
+        ResizeArg.Wout           = AT_INPUT_WIDTH_LPR;
+        ResizeArg.Hout           = AT_INPUT_HEIGHT_LPR;
+        ResizeArg.HTileOut       = AT_INPUT_HEIGHT_LPR;
+        ResizeArg.FirstLineIndex = 0;
+      task_resize->arg = &ResizeArg;
+      pi_cluster_send_task_to_cl(&cluster_dev, task_resize);
+
+  /*  	#ifdef HAVE_LCD
+        buffer_plate.data = img_plate_resized;
+        buffer_plate.stride = 0;
+        pi_buffer_init(&buffer_plate, PI_BUFFER_TYPE_L2, img_plate_resized);//+AT_INPUT_WIDTH*2+2);
+        pi_buffer_set_stride(&buffer_plate, 0);
+    		pi_display_write(&ili, &buffer_plate, 0, 0, AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR);
+    	#endif*/
+      pmsis_l2_malloc_free(img_plate, box_w*box_h*sizeof(char));
+      pmsis_l2_malloc_free(task_resize, sizeof(struct pi_cluster_task));
+
+      /* Init & open dmacpy. */
+      struct pi_dmacpy_conf dmacpy_conf = {0};
+      pi_dmacpy_conf_init(&dmacpy_conf);
+      pi_open_from_conf(&dmacpy, &dmacpy_conf);
+      int errors = pi_dmacpy_open(&dmacpy);
+      if (errors)
+      {
+        printf("Error dmacpy open : %ld !\n", errors);
+        pmsis_exit(-3);
+      }
+      // /* Copy buffer from L2 to L2. */
+      errors = pi_dmacpy_copy(&dmacpy, (void *) img_plate_resized, (void *) img_plate_resized+AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, PI_DMACPY_L2_L2);
+      errors = pi_dmacpy_copy(&dmacpy, (void *) img_plate_resized, (void *) img_plate_resized+2*AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, PI_DMACPY_L2_L2);
+      if(errors){
+        printf("Copy from L2 to L2 failed : %ld\n", errors); pmsis_exit(-5);
+      }
+
+      // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
+      if (__PREFIX2(CNN_Construct)())
+      {
+        printf("LPR Graph constructor exited with an error\n");
+        return 1;
+      }
+      PRINTF("Graph constructor was OK\n");
+      out_lpr = (char *) pmsis_l2_malloc(71*88*sizeof(char));
+      if(out_lpr==NULL){
+        printf("out_lpr alloc Error!\n");
+        pmsis_exit(-1);
+      }
+      /*--------------------------TASK SETUP------------------------------*/
+      struct pi_cluster_task *task_recogniction = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
+      if(task_recogniction==NULL) {
+        printf("pi_cluster_task alloc Error!\n");
+        pmsis_exit(-1);
+      }
+      PRINTF("Stack size is %d and %d\n",STACK_SIZE,SLAVE_STACK_SIZE );
+      memset(task_recogniction, 0, sizeof(struct pi_cluster_task));
+      task_recogniction->entry = &RunLPRNetwork;
+      task_recogniction->stack_size = STACK_SIZE;
+      task_recogniction->slave_stack_size = SLAVE_STACK_SIZE;
+      task_recogniction->arg = NULL;
+
+      // Execute the function "RunNetwork" on the cluster.
+      pi_cluster_send_task_to_cl(&cluster_dev, task_recogniction);
+      __PREFIX2(CNN_Destruct)();
+      pmsis_l2_malloc_free(img_plate_resized, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
+      pmsis_l2_malloc_free(out_lpr, 71*88*sizeof(char));
+      pmsis_l2_malloc_free(task_recogniction, sizeof(struct pi_cluster_task));
+      #ifdef HAVE_LCD
+        draw_text(&ili, OUT_CHAR, box_x, box_y-10, 2);
+      #endif
+    }
   }
-  while(1);
 
 pmsis_exit(0);
 return 0;
