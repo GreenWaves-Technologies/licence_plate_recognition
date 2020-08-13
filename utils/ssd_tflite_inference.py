@@ -1,14 +1,15 @@
+#!/usr/bin/python
+import sys
 import numpy as np
 import tensorflow as tf
 from PIL import Image, ImageDraw, ImageFont
 from glob import glob
 import os
+print("Tensorflow version: ", tf.__version__)
 
-
-TEST_IMG='images/0m_3.png'
-OUTPUT_FILE='inference_results.png'
-GRAPH_FILE='model/ssdlite_v2_quant_ocr.tflite'
-INFERENCE_THRESHOLD=0.5
+MODEL_PATH='model/ssdlite_ocr.tflite'
+TEST_IMG='images/china_1.ppm'
+INFERENCE_THRESHOLD=0.1
 
 def draw_image(image, results, size, labels=None):
     out_images = []
@@ -24,11 +25,6 @@ def draw_image(image, results, size, labels=None):
         xmax = int(xmax * size[1])
         ymin = int(ymin * size[0])
         ymax = int(ymax * size[0])
-        print("xmin: "+str(xmin))
-        print("ymin: "+str(ymin))
-        print("xmax: "+str(xmax))
-        print("ymax: "+str(ymax))
-
 
         # Draw rectangle to desired thickness
         for x in range( 0, 4 ):
@@ -43,7 +39,7 @@ def draw_image(image, results, size, labels=None):
 
         displayImage = np.asarray( image )
         out_images.append(image)
-    #image.show()
+    image.show()
     return image
 
 def set_input_tensor(interpreter, image):
@@ -81,36 +77,29 @@ def detect_objects(interpreter, image, threshold):
             results.append(result)
     return results
 
+def main():
+    # Load TFLite model and allocate tensors.
+    interpreter = tf.lite.Interpreter(model_path=MODEL_PATH)
+    interpreter.allocate_tensors()
+    _, input_height, input_width, _ = interpreter.get_input_details()[0]['shape']
 
-print(tf.__version__)
-# Load TFLite model and allocate tensors.
-model_path=GRAPH_FILE
+    # Get input and output tensors.
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
 
-interpreter = tf.lite.Interpreter(model_path=model_path)
-interpreter.allocate_tensors()
-_, input_height, input_width, _ = interpreter.get_input_details()[0]['shape']
+    if len(sys.argv) > 1:
+        img_file = sys.argv[1]
+    else:
+        img_file = TEST_IMG
+    print('input image: ', img_file)
+    img_in = Image.open(img_file).convert('RGB')
+    img_in = img_in.resize((input_details[0]['shape'][2], input_details[0]['shape'][1]))
+    input_array = np.array(img_in, dtype=np.uint8)
+    input_array = np.reshape(input_array, input_details[0]['shape']).astype(np.uint8)
 
-# Get input and output tensors.
-input_details = interpreter.get_input_details()
-output_details = interpreter.get_output_details()
+    results = detect_objects(interpreter, input_array, INFERENCE_THRESHOLD)
 
-file = TEST_IMG
-print(file)
-img_in = Image.open(file).convert('RGB')
-img_in = img_in.resize((input_details[0]['shape'][2], input_details[0]['shape'][1]))
-input_array = np.array(img_in, dtype=np.uint8)
-input_array = np.reshape(input_array, input_details[0]['shape']).astype(np.uint8)
+    out_image = draw_image(img_in, results, img_in.size)
 
-#for float inteference
-#input_array = np.array(img_in, dtype=np.float)
-#input_array = np.reshape(input_array, input_details[0]['shape']).astype(np.float)
-#input_array = input_array*0.007843137718737125
-#input_array = input_array-1
-results = detect_objects(interpreter, input_array, 0.5)
-
-
-out_images = draw_image(img_in, results, img_in.size)
-
-out_images.save(OUTPUT_FILE)
-
-print("Output image save in %s" % OUTPUT_FILE)
+if __name__ == "__main__":
+    main()

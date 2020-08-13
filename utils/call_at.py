@@ -17,37 +17,39 @@ TOT_COEFFS = re.compile(r'(?P<column>Total amount of flash coefficients)\s+\:\s+
 
 matches = [L3_MEM_BW, L2_MEM_BW, TIL_OH, KER_ARGS, L2_MEM_BW_PER, L3_MEM_BW_PER, KER_OPS, TOT_COEFFS]
 
-L2_dict = {}
-frames = [] 
-for L2_MEM in range(190000, 380000, 10000):
-	columns = []
-	if sys.argv[1] == 'SSD':
-		stream = os.popen('make -f ssd.mk at_model MODEL_L2_MEMORY={}'.format(L2_MEM))
-	elif sys.argv[1] == 'LPR':
-		stream = os.popen('make -f lprnet.mk at_model MODEL_L2_MEMORY={}'.format(L2_MEM))
-	else:
-		print("Argument must be: SSD or LPR")
-		print(sys.argv[1])
-		break
+def main():
+	L2_dict = {}
+	frames = [] 
+	assert len(sys.argv) > 1, "The script must be called: python3 utils/call_at.py SSD or LPR"
+	assert sys.argv[1] in ("SSD", "LPR"), "Argument must be: SSD or LPR"
+	for L2_MEM in range(190000, 380000, 10000):
+		columns = []
+		if sys.argv[1] == 'SSD':
+			stream = os.popen('make -f ssd.mk at_model MODEL_L2_MEMORY={}'.format(L2_MEM))
+		elif sys.argv[1] == 'LPR':
+			stream = os.popen('make -f lprnet.mk at_model MODEL_L2_MEMORY={}'.format(L2_MEM))
 
-	out_log = stream.readlines()
+		out_log = stream.readlines()
 
-	#print(output[-24:-12])
-	out_dict = {}
-	row = []
-	for line in out_log:
-		for match in matches:
-			m = match.search(line)
-			if m:
-				columns.append(m['column'])
-				row.append(float(m['value']))
-				continue
-	df1 = pd.DataFrame.from_dict({L2_MEM: row}, orient='index', columns=columns)
-	frames.append(df1)
+		#print(output[-24:-12])
+		out_dict = {}
+		row = []
+		for line in out_log:
+			for match in matches:
+				m = match.search(line)
+				if m:
+					columns.append(m['column'])
+					row.append(float(m['value']))
+					continue
+		df1 = pd.DataFrame.from_dict({L2_MEM: row}, orient='index', columns=columns)
+		frames.append(df1)
 
-df = pd.concat(frames)
-normalized_df=(df-df.min())/(df.max()-df.min())
+	df = pd.concat(frames, sort=False)
+	normalized_df=(df-df.min())/(df.max()-df.min())
 
-normalized_df.cumsum()
-normalized_df.plot()
-plt.show()
+	normalized_df.cumsum()
+	normalized_df.plot()
+	plt.show()
+
+if __name__ == "__main__":
+	main()
