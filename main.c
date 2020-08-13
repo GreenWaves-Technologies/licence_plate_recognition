@@ -37,10 +37,11 @@ struct pi_device HyperRam;
 struct pi_device ili;
 static uint32_t l3_buff;
 signed char * img_plate_resized;
-signed char * img_plate_resized_chw;
 signed char * out_lpr;
 static pi_buffer_t buffer;
 static pi_buffer_t buffer_plate;
+
+signed char OUT_CHAR[100];
 
 L2_MEM bbox_t *out_boxes;
 
@@ -74,8 +75,13 @@ static void RunSSDNetwork()
   printf("Start timer\n");
   gap_cl_starttimer();
   gap_cl_resethwtimer();
+  int start = gap_cl_readhwtimer();
 #endif
   __PREFIX1(CNN)(l3_buff, out_boxes);
+#ifdef PERF
+  int end = gap_cl_readhwtimer();
+  printf("SSD PERF: %d cycles\n", end - start);
+#endif
 }
 
 static void RunLPRNetwork()
@@ -85,11 +91,13 @@ static void RunLPRNetwork()
   printf("Start timer\n");
   gap_cl_starttimer();
   gap_cl_resethwtimer();
+  int start = gap_cl_readhwtimer();
 #endif
-  __PREFIX2(CNN)(img_plate_resized_chw, out_lpr);
+  __PREFIX2(CNN)(img_plate_resized, out_lpr);
   int max_prob;
   int predicted_char = 70;
   PRINTF("OUTPUT: \n");
+  strcpy(OUT_CHAR, "");
   for (int i=0; i<88; i++){
     max_prob = 0x80000000;
     for (int j=0; j<71; j++){
@@ -99,9 +107,15 @@ static void RunLPRNetwork()
       }
     }
     if (predicted_char==70) continue;
+    strcat(OUT_CHAR, CHAR_DICT[predicted_char]);
+    strcat(OUT_CHAR, " ");
     PRINTF("%s, ", CHAR_DICT[predicted_char]);
   }
   PRINTF("\n");
+#ifdef PERF
+  int end = gap_cl_readhwtimer();
+  printf("SSD PERF: %d cycles\n", end - start);
+#endif
 }
 
 static void Resize(KerResizeBilinear_ArgT *KerArg)
@@ -223,25 +237,15 @@ int start()
     int box_h = (int)(FIX2FP(plate_bbox.h,14)*240);
     PRINTF("BBOX (x, y, w, h): (%d, %d, %d, %d)\n", box_x, box_y, box_w, box_h);
   	signed char* img_plate = (signed char *) pmsis_l2_malloc(box_w*box_h*sizeof(char));
-    img_plate_resized      = (signed char *) pmsis_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*sizeof(char));
+    img_plate_resized      = (signed char *) pmsis_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
   	if(img_plate==NULL || img_plate_resized==NULL){
   	  PRINTF("Error allocating image plate buffers\n");
   	  pmsis_exit(-1);
   	}
     pi_task_t end_copy;
-    PRINTF("Start Copy 2d\n");
     pi_ram_copy_2d_async(&HyperRam, (uint32_t) (l3_buff+box_y*AT_INPUT_WIDTH_SSD+box_x), (img_plate), \
                          (uint32_t) box_w*box_h, (uint32_t) AT_INPUT_WIDTH_SSD, (uint32_t) box_w, 1, pi_task_block(&end_copy));
     pi_task_wait_on(&end_copy);
-    printf("Ended copy\n");
-    #ifdef HAVE_LCD
-      buffer_plate.data = img_plate;
-      buffer_plate.stride = 0;
-      pi_buffer_init(&buffer_plate, PI_BUFFER_TYPE_L2, img_plate);//+AT_INPUT_WIDTH*2+2);
-      pi_buffer_set_stride(&buffer_plate, 0);
-      writeFillRect(&ili, 0, 0, 320, 240, 0xFFFF);
-      pi_display_write(&ili, &buffer_plate, 0, 50, box_w, box_h);
-    #endif
 
     /*--------------------------TASK SETUP------------------------------*/
     struct pi_cluster_task *task_resize = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
@@ -267,16 +271,15 @@ int start()
     task_resize->arg = &ResizeArg;
     pi_cluster_send_task_to_cl(&cluster_dev, task_resize);
 
-  	#ifdef HAVE_LCD
+/*  	#ifdef HAVE_LCD
       buffer_plate.data = img_plate_resized;
       buffer_plate.stride = 0;
       pi_buffer_init(&buffer_plate, PI_BUFFER_TYPE_L2, img_plate_resized);//+AT_INPUT_WIDTH*2+2);
       pi_buffer_set_stride(&buffer_plate, 0);
   		pi_display_write(&ili, &buffer_plate, 0, 0, AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR);
-  	#endif
+  	#endif*/
     pmsis_l2_malloc_free(img_plate, box_w*box_h*sizeof(char));
     pmsis_l2_malloc_free(out_boxes, MAX_BB*sizeof(bbox_t));
-    img_plate_resized_chw = (signed char *) pmsis_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
 
     /* Init & open dmacpy. */
     struct pi_dmacpy_conf dmacpy_conf = {0};
@@ -289,9 +292,8 @@ int start()
       pmsis_exit(-3);
     }
     // /* Copy buffer from L2 to L2. */
-    errors = pi_dmacpy_copy(&dmacpy, (void *) img_plate_resized, (void *) img_plate_resized_chw, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, PI_DMACPY_L2_L2);
-    errors = pi_dmacpy_copy(&dmacpy, (void *) img_plate_resized, (void *) img_plate_resized_chw+AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, PI_DMACPY_L2_L2);
-    errors = pi_dmacpy_copy(&dmacpy, (void *) img_plate_resized, (void *) img_plate_resized_chw+2*AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, PI_DMACPY_L2_L2);
+    errors = pi_dmacpy_copy(&dmacpy, (void *) img_plate_resized, (void *) img_plate_resized+AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, PI_DMACPY_L2_L2);
+    errors = pi_dmacpy_copy(&dmacpy, (void *) img_plate_resized, (void *) img_plate_resized+2*AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, PI_DMACPY_L2_L2);
     if(errors){
       printf("Copy from L2 to L2 failed : %ld\n", errors); pmsis_exit(-5);
     }
@@ -324,7 +326,9 @@ int start()
     // Execute the function "RunNetwork" on the cluster.
     pi_cluster_send_task_to_cl(&cluster_dev, task_recogniction);
     __PREFIX2(CNN_Destruct)();
+    draw_text(&ili, OUT_CHAR, box_x, box_y-10, 2);
   }
+  while(1);
 
 pmsis_exit(0);
 return 0;
