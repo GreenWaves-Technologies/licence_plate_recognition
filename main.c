@@ -113,6 +113,10 @@ static void RunLPRNetwork()
   int start = gap_cl_readhwtimer();
 #endif
   __PREFIX2(CNN)(img_plate_resized, out_lpr);
+#ifdef PERF
+  int end = gap_cl_readhwtimer();
+  printf("LPR PERF: %d cycles\n", end - start);
+#endif
   int max_prob;
   int predicted_char = 70;
   PRINTF("OUTPUT: \n");
@@ -131,10 +135,6 @@ static void RunLPRNetwork()
     PRINTF("%s, ", CHAR_DICT[predicted_char]);
   }
   PRINTF("\n");
-#ifdef PERF
-  int end = gap_cl_readhwtimer();
-  printf("LPR PERF: %d cycles\n", end - start);
-#endif
 }
 
 static void Resize(KerResizeBilinear_ArgT *KerArg)
@@ -145,10 +145,6 @@ static void Resize(KerResizeBilinear_ArgT *KerArg)
 
 int start()
 {
-  #ifdef MEASUREMENTS
-	pi_gpio_pin_configure(NULL, PI_GPIO_A0_PAD_8_A4, PI_GPIO_OUTPUT);
-	pi_gpio_pin_write(NULL, PI_GPIO_A0_PAD_8_A4, 0);
-  #endif
 #ifdef HAVE_HIMAX
   int err = open_camera_himax(&camera);
   if (err) {
@@ -199,17 +195,6 @@ while(1)
       pi_camera_control(&camera, PI_CAMERA_CMD_START, 0);
       pi_camera_capture(&camera, Input_1, CAMERA_SIZE);
       pi_camera_control(&camera, PI_CAMERA_CMD_STOP, 0);
-
-      // Image Cropping to [ AT_INPUT_HEIGHT_SSD x AT_INPUT_WIDTH_SSD ]
-      int ps=0;
-      for(int i =0;i<CAMERA_HEIGHT;i++){
-        for(int j=0;j<CAMERA_WIDTH;j++){
-          if (i<AT_INPUT_HEIGHT_SSD && j<AT_INPUT_WIDTH_SSD){
-            Input_1[ps] = Input_1[i*CAMERA_WIDTH+j] - 128;
-            ps++;             
-          }
-        }
-      }
     #else
       uint8_t* Input_1 = (uint8_t*) pmsis_l2_malloc(AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
       char *ImageName = __XSTR(AT_IMAGE);
@@ -224,9 +209,6 @@ while(1)
         printf("Failed to load image %s\n", ImageName);
         return 1;
       }
-      for(int i=0; i<AT_INPUT_HEIGHT_SSD*AT_INPUT_WIDTH_SSD; i++){
-        Input_1[i] -= 128;
-      }
     #endif
     #ifdef HAVE_LCD
       buffer.data = Input_1;
@@ -236,6 +218,22 @@ while(1)
       pi_buffer_set_stride(&buffer, 0);
       pi_buffer_set_format(&buffer, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD, 1, PI_BUFFER_FORMAT_GRAY);
     	pi_display_write(&ili, &buffer, 0, 0, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD);
+    #endif
+    #ifdef HAVE_HIMAX
+      // Image Cropping to [ AT_INPUT_HEIGHT_SSD x AT_INPUT_WIDTH_SSD ]
+      int ps=0;
+      for(int i =0;i<CAMERA_HEIGHT;i++){
+        for(int j=0;j<CAMERA_WIDTH;j++){
+          if (i<AT_INPUT_HEIGHT_SSD && j<AT_INPUT_WIDTH_SSD){
+            Input_1[ps] = Input_1[i*CAMERA_WIDTH+j] - 128;
+            ps++;             
+          }
+        }
+      }
+    #else
+      for(int i=0; i<AT_INPUT_HEIGHT_SSD*AT_INPUT_WIDTH_SSD; i++){
+        Input_1[i] -= 128;
+      }
     #endif
     pi_ram_write(&HyperRam, l3_buff                                         , Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
     pi_ram_write(&HyperRam, l3_buff+AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD  , Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
@@ -322,13 +320,13 @@ while(1)
       task_resize->arg = &ResizeArg;
       pi_cluster_send_task_to_cl(&cluster_dev, task_resize);
 
-  /*  	#ifdef HAVE_LCD
+    	#ifdef HAVE_LCD
         buffer_plate.data = img_plate_resized;
         buffer_plate.stride = 0;
-        pi_buffer_init(&buffer_plate, PI_BUFFER_TYPE_L2, img_plate_resized);//+AT_INPUT_WIDTH*2+2);
+        pi_buffer_init(&buffer_plate, PI_BUFFER_TYPE_L2, img_plate_resized);
         pi_buffer_set_stride(&buffer_plate, 0);
     		pi_display_write(&ili, &buffer_plate, 0, 0, AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR);
-    	#endif*/
+    	#endif
       pmsis_l2_malloc_free(img_plate, box_w*box_h*sizeof(char));
       pmsis_l2_malloc_free(task_resize, sizeof(struct pi_cluster_task));
 
