@@ -16,32 +16,24 @@
 #define __XSTR(__s) __STR(__s)
 #define __STR(__s) #__s
 
-#ifdef SILENT
-	#define PRINTF(...) ((void) 0)
-#else
-	#define PRINTF printf
-#endif
-
 #ifdef __EMUL__
 char *ImageName;
-#ifdef PERF
-#undef PERF
-#endif
 #endif
 
 #define AT_INPUT_SIZE (AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*AT_INPUT_COLORS_LPR)
-
-#ifndef STACK_SIZE
-#define STACK_SIZE     2048 
-#endif
 
 AT_HYPERFLASH_FS_EXT_ADDR_TYPE __PREFIX(_L3_Flash) = 0;
 
 static char *CHAR_DICT [71] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "<Anhui>", "<Beijing>", "<Chongqing>", "<Fujian>", "<Gansu>", "<Guangdong>", "<Guangxi>", "<Guizhou>", "<Hainan>", "<Hebei>", "<Heilongjiang>", "<Henan>", "<HongKong>", "<Hubei>", "<Hunan>", "<InnerMongolia>", "<Jiangsu>", "<Jiangxi>", "<Jilin>", "<Liaoning>", "<Macau>", "<Ningxia>", "<Qinghai>", "<Shaanxi>", "<Shandong>", "<Shanghai>", "<Shanxi>", "<Sichuan>", "<Tianjin>", "<Tibet>", "<Xinjiang>", "<Yunnan>", "<Zhejiang>", "<police>", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "_"};
 
-signed char Output_1[71*88];
 typedef signed char IMAGE_IN_T;
-unsigned char Input_1[AT_INPUT_SIZE];
+#ifdef __EMUL__
+	unsigned char Input_1[AT_INPUT_SIZE];
+#else
+	unsigned char * Input_1;
+	static struct pi_device dmacpy;
+#endif
+signed char * Output_1;
 
 static void RunNetwork()
 {
@@ -50,7 +42,8 @@ static void RunNetwork()
 	gap_cl_starttimer();
 	gap_cl_resethwtimer();
 #endif
-	__PREFIX(CNN)(Input_1, Output_1);
+  __PREFIX(CNN)(Input_1, Output_1);
+
 	PRINTF("Runner completed\n");
 	int max_prob;
 	int predicted_char = 70;
@@ -70,54 +63,117 @@ static void RunNetwork()
 }
 
 int start()
-{
-	PRINTF("Entering main controller\n");
-	
+{	
 #ifndef __EMUL__
 	#ifdef MEASUREMENTS
     pi_gpio_pin_configure(NULL, PI_GPIO_A0_PAD_8_A4, PI_GPIO_OUTPUT);
     pi_gpio_pin_write(NULL, PI_GPIO_A0_PAD_8_A4, 0);
     #endif
 
-	char *ImageName = __XSTR(AT_IMAGE);
-	struct pi_device cluster_dev;
-	struct pi_cluster_task *task;
-	struct pi_cluster_conf conf;
+	// /* Init & open ram. */
+	// struct pi_hyperram_conf hyper_conf;
+	// pi_hyperram_conf_init(&hyper_conf);
+	// pi_open_from_conf(&HyperRam, &hyper_conf);
+	// if (pi_ram_open(&HyperRam))
+	// {
+	// 	printf("Error ram open !\n");
+	// 	pmsis_exit(-3);
+	// }
 
+	// if (pi_ram_alloc(&HyperRam, &l3_buff, (uint32_t) AT_INPUT_SIZE))
+	// {
+	// 	printf("Ram malloc failed !\n");
+	// 	pmsis_exit(-4);
+	// }
+
+	pi_freq_set(PI_FREQ_DOMAIN_CL, FREQ_CL*1000*1000);
+	pi_freq_set(PI_FREQ_DOMAIN_FC, FREQ_FC*1000*1000);
+
+	/*-----------------------OPEN THE CLUSTER--------------------------*/
+	struct pi_device cluster_dev;
+	struct pi_cluster_conf conf;
 	pi_cluster_conf_init(&conf);
 	pi_open_from_conf(&cluster_dev, (void *)&conf);
 	pi_cluster_open(&cluster_dev);
-	pi_freq_set(PI_FREQ_DOMAIN_CL, FREQ_CL*1000*1000);
-	pi_freq_set(PI_FREQ_DOMAIN_FC, FREQ_FC*1000*1000);
-	task = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
-	if (!task) {
-		printf("failed to allocate memory for task\n");
+
+	char *ImageName = __XSTR(AT_IMAGE);
+	//Reading Image from Bridge
+	uint8_t* Input_1 = (uint8_t*) pmsis_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
+	if(Input_1==NULL){
+		PRINTF("Error allocating image buffer\n");
+		pmsis_exit(-1);
 	}
+	/* -------------------- Read Image from bridge ---------------------*/
+	PRINTF("Reading image\n");
+	if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR, 1, Input_1, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*sizeof(char), IMGIO_OUTPUT_CHAR, 0)) {
+		printf("Failed to load image %s\n", ImageName);
+		return 1;
+	}
+	for(int i=0; i<AT_INPUT_HEIGHT_SSD*AT_INPUT_WIDTH_SSD; i++){
+		Input_1[i] -= 128;
+	}
+	/* Init & open dmacpy. */
+    struct pi_dmacpy_conf dmacpy_conf = {0};
+    pi_dmacpy_conf_init(&dmacpy_conf);
+    pi_open_from_conf(&dmacpy, &dmacpy_conf);
+    int errors = pi_dmacpy_open(&dmacpy);
+    if (errors)
+    {
+      printf("Error dmacpy open : %ld !\n", errors);
+      pmsis_exit(-3);
+    }
+    // /* Copy buffer from L2 to L2. */
+    errors = pi_dmacpy_copy(&dmacpy, (void *) Input_1, (void *) Input_1 + AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, PI_DMACPY_L2_L2);
+    errors = pi_dmacpy_copy(&dmacpy, (void *) Input_1, (void *) Input_1 + 2*AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, PI_DMACPY_L2_L2);
+    if(errors){
+      printf("Copy from L2 to L2 failed : %ld\n", errors); pmsis_exit(-5);
+    }
+	// pi_ram_write(&HyperRam, l3_buff                                         , Input_1, (uint32_t) AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR);
+	// pi_ram_write(&HyperRam, l3_buff+AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR  , Input_1, (uint32_t) AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR);
+	// pi_ram_write(&HyperRam, l3_buff+2*AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, Input_1, (uint32_t) AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR);
+	// pmsis_l2_malloc_free(Input_1, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*sizeof(char));
+	PRINTF("Finished reading image\n");
+	//Allocate output buffers:
+	Output_1  = (short int *) pmsis_l2_malloc(71*88);
+	if(Output_1==NULL){
+		printf("Error Allocating CNN output buffers");
+		return 1;
+	}
+	/*--------------------------TASK SETUP------------------------------*/
+	struct pi_cluster_task *task = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
+	if(task==NULL) {
+		printf("pi_cluster_task alloc Error!\n");
+		pmsis_exit(-1);
+	}
+	PRINTF("Stack size is %d and %d\n",STACK_SIZE,SLAVE_STACK_SIZE );
 	memset(task, 0, sizeof(struct pi_cluster_task));
 	task->entry = &RunNetwork;
 	task->stack_size = STACK_SIZE;
 	task->slave_stack_size = SLAVE_STACK_SIZE;
 	task->arg = NULL;
+#else
+	/*--------------- in emul mode the model has the formatter ---------- */
+	PRINTF("Reading image\n");
+	if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR, AT_INPUT_COLORS_LPR, Input_1, AT_INPUT_SIZE*sizeof(char), IMGIO_OUTPUT_CHAR, 0)) {
+		printf("Failed to load image %s\n", ImageName);
+		return 1;
+	}
+	//Allocate output buffers:
+	Output_1  = (short int *)AT_L2_ALLOC(0, 71*88);
+	if(Output_1==NULL){
+		printf("Error Allocating CNN output buffers");
+		return 1;
+	}
 #endif
 
-	PRINTF("Constructor\n");
 	// IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
 	if (__PREFIX(CNN_Construct)())
 	{
 		printf("Graph constructor exited with an error\n");
 		return 1;
 	}
+	PRINTF("Graph constructor was OK\n");
 
-	PRINTF("Reading image\n");
-	//Reading Image from Bridge
-	if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR, AT_INPUT_COLORS_LPR,
-			      		  Input_1, AT_INPUT_SIZE*sizeof(IMAGE_IN_T), IMGIO_OUTPUT_CHAR, 0)) {
-		printf("Failed to load image %s\n", ImageName);
-		return 1;
-	}
-	PRINTF("Finished reading image\n");
-
-	PRINTF("Call cluster\n");
 #ifndef __EMUL__
 	#ifdef MEASUREMENTS
 	for (int i=0; i<1000; i++){
@@ -135,8 +191,6 @@ int start()
 	RunNetwork();
 #endif
 
-	__PREFIX(CNN_Destruct)();
-
 #ifdef PERF
 	{
 		unsigned int TotalCycles = 0, TotalOper = 0;
@@ -151,6 +205,8 @@ int start()
 		printf("\n");
 	}
 #endif
+
+	__PREFIX(CNN_Destruct)();
 
 #ifndef __EMUL__
 	pmsis_exit(0);

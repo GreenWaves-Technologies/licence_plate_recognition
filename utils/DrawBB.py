@@ -18,7 +18,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 #INTPUT_FILE = "test_images/test_000_0000084_resized_rgb.ppm"
-INTPUT_FILE = "images/china_1.ppm"
+INTPUT_FILE = "../images/china_1.ppm"
 #INTPUT_FILE = "output0.ppm"
 OUTPUT_FILE = "result.png"
 

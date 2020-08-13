@@ -1,8 +1,9 @@
-set debug true
 adjust
 fusions --scale8
+
 #imageformat input_1 rgb888 offset_int8
-######nodeoption input_1 EXTERN_INPUT_POINTER 1
+#nodeoption input_1 EXTERN_INPUT_POINTER 1
+
 ############### OPTIMIZATIONS #################
 nodeoption 2 PARALLELFEATURES 0
 nodeoption 4 PARALLELFEATURES 0
@@ -18,22 +19,21 @@ nodeoption 42 PARALLELFEATURES 0
 nodeoption 50 PARALLELFEATURES 0
 nodeoption 64 PARALLELFEATURES 0
 nodeoption 110 PARALLELFEATURES 0
-################ Eric Options ################
+
 nodeoption 48 OUT_HOME_MEM_LOC AT_MEM_L3_HRAM
 nodeoption 48 OUT_EXEC_MEM_LOC AT_MEM_L3_HRAM
 set graph_size_opt 2
-#set graph_noinline_node true
+
 ##############################################
 set default_input_exec_location "AT_MEM_L3_HRAM"
 set default_input_home_location "AT_MEM_L3_HRAM"
 set l3_ram_ext_managed true
-set l2_ram_ext_managed false
-
-#set graph_trace_exec true
 set graph_reorder_constant_in true
-set graph_produce_node_names true
-set graph_produce_operinfos true
-set graph_monitor_cycles true
 set graph_const_exec_from_flash true
-#set graph_dump_tensor 7
+
+############## PERF COUNTER #################
+#set graph_produce_node_names true
+#set graph_produce_operinfos true
+#set graph_monitor_cycles true
+
 save_state
