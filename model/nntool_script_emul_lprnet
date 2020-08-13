@@ -1,11 +1,11 @@
 adjust
 fusions --scale8
-imageformat input_1 rgb888 offset_int8
+#imageformat input_1 rgb888 offset_int8
+nodeoption 1 PARALLELFEATURES 0
 nodeoption 2 PARALLELFEATURES 0
 nodeoption 3 PARALLELFEATURES 0
-nodeoption 4 PARALLELFEATURES 0
-nodeoption 8 PARALLELFEATURES 0
-nodeoption 12 PARALLELFEATURES 0
+nodeoption 7 PARALLELFEATURES 0
+nodeoption 11 PARALLELFEATURES 0
 set l2_ram_ext_managed false
 #set graph_reorder_constant_in false
 set graph_produce_node_names true

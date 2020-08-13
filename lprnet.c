@@ -154,9 +154,15 @@ int start()
 #else
 	/*--------------- in emul mode the model has the formatter ---------- */
 	PRINTF("Reading image\n");
-	if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR, AT_INPUT_COLORS_LPR, Input_1, AT_INPUT_SIZE*sizeof(char), IMGIO_OUTPUT_CHAR, 0)) {
+	if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR, 1, Input_1, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*sizeof(char), IMGIO_OUTPUT_CHAR, 0)) {
 		printf("Failed to load image %s\n", ImageName);
 		return 1;
+	}
+	for (int i=0; i<AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR; i++){
+		int temp = Input_1[i] - 128;
+		Input_1[i]                                          = temp;
+		Input_1[i+AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR]   = temp;
+		Input_1[i+2*AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR] = temp;
 	}
 	//Allocate output buffers:
 	Output_1  = (short int *)AT_L2_ALLOC(0, 71*88);
