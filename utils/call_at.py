@@ -22,12 +22,12 @@ def main():
 	frames = [] 
 	assert len(sys.argv) > 1, "The script must be called: python3 utils/call_at.py SSD or LPR"
 	assert sys.argv[1] in ("SSD", "LPR"), "Argument must be: SSD or LPR"
-	for L2_MEM in range(190000, 380000, 10000):
+	for L2_MEM in range(190, 380, 10):
 		columns = []
 		if sys.argv[1] == 'SSD':
-			stream = os.popen('make -f ssd.mk at_model MODEL_L2_MEMORY={}'.format(L2_MEM))
+			stream = os.popen('make -f ssd.mk at_model MODEL_L2_MEMORY={}'.format(L2_MEM*1000))
 		elif sys.argv[1] == 'LPR':
-			stream = os.popen('make -f lprnet.mk at_model MODEL_L2_MEMORY={}'.format(L2_MEM))
+			stream = os.popen('make -f lprnet.mk at_model MODEL_L2_MEMORY={}'.format(L2_MEM*1000))
 
 		out_log = stream.readlines()
 
@@ -49,6 +49,9 @@ def main():
 
 	normalized_df.cumsum()
 	normalized_df.plot()
+	plt.xlabel('L2 MEM [KB]')
+	plt.ylabel('normalized between min-max')
+
 	plt.show()
 
 if __name__ == "__main__":
