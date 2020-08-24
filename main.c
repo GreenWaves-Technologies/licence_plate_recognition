@@ -71,9 +71,9 @@ static int open_display(struct pi_device *device)
 
 void draw_text(struct pi_device *display, const char *str, unsigned posX, unsigned posY, unsigned fontsize)
 {
-    writeFillRect(ili, 0, 340, posX, fontsize*8, 0xFFFF);
-    setCursor(ili, posX, posY);
-    writeText(ili, str, fontsize);
+    writeFillRect(display, 0, 340, posX, fontsize*8, 0xFFFF);
+    setCursor(display, posX, posY);
+    writeText(display, str, fontsize);
 }
 #endif
 
@@ -131,7 +131,6 @@ static void RunLPRNetwork()
     }
     if (predicted_char==70) continue;
     strcat(OUT_CHAR, CHAR_DICT[predicted_char]);
-    strcat(OUT_CHAR, " ");
     PRINTF("%s, ", CHAR_DICT[predicted_char]);
   }
   PRINTF("\n");
@@ -191,6 +190,11 @@ while(1)
   //------------------------- Aquisition + INFERENCE
     #ifdef HAVE_HIMAX
       uint8_t* Input_1 = (uint8_t*) pmsis_l2_malloc(CAMERA_SIZE*sizeof(char));
+      //Reading Image from Bridge
+      if(Input_1==NULL){
+        printf("Error allocating image buffer\n");
+        pmsis_exit(-1);
+      }
       // Get an image 
       pi_camera_control(&camera, PI_CAMERA_CMD_START, 0);
       pi_camera_capture(&camera, Input_1, CAMERA_SIZE);
@@ -200,7 +204,7 @@ while(1)
       char *ImageName = __XSTR(AT_IMAGE);
       //Reading Image from Bridge
       if(Input_1==NULL){
-        PRINTF("Error allocating image buffer\n");
+        printf("Error allocating image buffer\n");
         pmsis_exit(-1);
       }
     /* -------------------- Read Image from bridge ---------------------*/
@@ -217,7 +221,7 @@ while(1)
       pi_buffer_init(&buffer, PI_BUFFER_TYPE_L2, Input_1);
       pi_buffer_set_stride(&buffer, 0);
       pi_buffer_set_format(&buffer, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD, 1, PI_BUFFER_FORMAT_GRAY);
-    	pi_display_write(&ili, &buffer, 0, 0, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD);
+      pi_display_write(&ili, &buffer, 0, 0, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD);
     #endif
     #ifdef HAVE_HIMAX
       // Image Cropping to [ AT_INPUT_HEIGHT_SSD x AT_INPUT_WIDTH_SSD ]
@@ -226,7 +230,7 @@ while(1)
         for(int j=0;j<CAMERA_WIDTH;j++){
           if (i<AT_INPUT_HEIGHT_SSD && j<AT_INPUT_WIDTH_SSD){
             Input_1[ps] = Input_1[i*CAMERA_WIDTH+j] - 128;
-            ps++;             
+            ps++;
           }
         }
       }
@@ -320,13 +324,13 @@ while(1)
       task_resize->arg = &ResizeArg;
       pi_cluster_send_task_to_cl(&cluster_dev, task_resize);
 
-    	#ifdef HAVE_LCD
+/*    	#ifdef HAVE_LCD
         buffer_plate.data = img_plate_resized;
         buffer_plate.stride = 0;
         pi_buffer_init(&buffer_plate, PI_BUFFER_TYPE_L2, img_plate_resized);
         pi_buffer_set_stride(&buffer_plate, 0);
     		pi_display_write(&ili, &buffer_plate, 0, 0, AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR);
-    	#endif
+    	#endif*/
       pmsis_l2_malloc_free(img_plate, box_w*box_h*sizeof(char));
       pmsis_l2_malloc_free(task_resize, sizeof(struct pi_cluster_task));
 
