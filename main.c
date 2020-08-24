@@ -381,6 +381,9 @@ while(1)
       #ifdef HAVE_LCD
         draw_text(&ili, OUT_CHAR, box_x, box_y-10, 2);
       #endif
+      #ifdef ONE_ITER
+        break;
+      #endif
     }
   }
 
