@@ -151,14 +151,6 @@ int start()
     pmsis_exit(-2);
   }
 #endif
-#ifdef HAVE_LCD
-	if (open_display(&ili)){
-		printf("Failed to open display\n");
-		pmsis_exit(-1);
-	}
-    writeFillRect(&ili, 0, 0, 320, 240, 0xFFFF);
-    writeText(&ili, "GreenWaves Technologies", 2);
-#endif
   /* Init & open ram. */
   struct pi_hyperram_conf hyper_conf;
   pi_hyperram_conf_init(&hyper_conf);
@@ -185,6 +177,13 @@ int start()
   pi_freq_set(PI_FREQ_DOMAIN_CL, FREQ_CL*1000*1000);
   pi_freq_set(PI_FREQ_DOMAIN_FC, FREQ_FC*1000*1000);
 
+#ifdef HAVE_LCD
+  if (open_display(&ili)){
+    printf("Failed to open display\n");
+    pmsis_exit(-1);
+  }
+#endif
+
 while(1) 
   {
   //------------------------- Aquisition + INFERENCE
@@ -199,6 +198,18 @@ while(1)
       pi_camera_control(&camera, PI_CAMERA_CMD_START, 0);
       pi_camera_capture(&camera, Input_1, CAMERA_SIZE);
       pi_camera_control(&camera, PI_CAMERA_CMD_STOP, 0);
+      #ifdef HAVE_LCD
+        // Image Cropping to [ AT_INPUT_HEIGHT_SSD x AT_INPUT_WIDTH_SSD ]
+        int idx=0;
+        for(int i =0;i<CAMERA_HEIGHT;i++){
+          for(int j=0;j<CAMERA_WIDTH;j++){
+            if (i<AT_INPUT_HEIGHT_SSD && j<AT_INPUT_WIDTH_SSD){
+              Input_1[idx] = Input_1[i*CAMERA_WIDTH+j];
+            idx++;
+            }
+          }
+        }
+      #endif
     #else
       uint8_t* Input_1 = (uint8_t*) pmsis_l2_malloc(AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
       char *ImageName = __XSTR(AT_IMAGE);
@@ -223,22 +234,9 @@ while(1)
       pi_buffer_set_format(&buffer, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD, 1, PI_BUFFER_FORMAT_GRAY);
       pi_display_write(&ili, &buffer, 0, 0, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD);
     #endif
-    #ifdef HAVE_HIMAX
-      // Image Cropping to [ AT_INPUT_HEIGHT_SSD x AT_INPUT_WIDTH_SSD ]
-      int ps=0;
-      for(int i =0;i<CAMERA_HEIGHT;i++){
-        for(int j=0;j<CAMERA_WIDTH;j++){
-          if (i<AT_INPUT_HEIGHT_SSD && j<AT_INPUT_WIDTH_SSD){
-            Input_1[ps] = Input_1[i*CAMERA_WIDTH+j] - 128;
-            ps++;
-          }
-        }
-      }
-    #else
-      for(int i=0; i<AT_INPUT_HEIGHT_SSD*AT_INPUT_WIDTH_SSD; i++){
-        Input_1[i] -= 128;
-      }
-    #endif
+    for(int i=0; i<AT_INPUT_HEIGHT_SSD*AT_INPUT_WIDTH_SSD; i++){
+      Input_1[i] -= 128;
+    }
     pi_ram_write(&HyperRam, l3_buff                                         , Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
     pi_ram_write(&HyperRam, l3_buff+AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD  , Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
     pi_ram_write(&HyperRam, l3_buff+2*AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD, Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
@@ -279,9 +277,9 @@ while(1)
     pi_cluster_send_task_to_cl(&cluster_dev, task);
 
     bbox_t plate_bbox = out_boxes[0];
+    __PREFIX1(CNN_Destruct)();
     pmsis_l2_malloc_free(task, sizeof(struct pi_cluster_task));
     pmsis_l2_malloc_free(out_boxes, MAX_BB*sizeof(bbox_t));
-    __PREFIX1(CNN_Destruct)();
 
     if(plate_bbox.alive){
      	int box_x = (int)(FIX2FP(plate_bbox.x,14)*320);
@@ -295,6 +293,12 @@ while(1)
     	  printf("Error allocating image plate buffers\n");
     	  pmsis_exit(-1);
     	}
+      #ifdef HAVE_LCD
+        writeFillRect(&ili, box_x, box_y, 2, box_h, 0xFFFF);
+        writeFillRect(&ili, box_x, box_y, box_w, 2, 0xFFFF);
+        writeFillRect(&ili, box_x, box_y+box_h, box_w, 2, 0xFFFF);
+        writeFillRect(&ili, box_x+box_w, box_y, 2, box_h, 0xFFFF);
+      #endif
       pi_task_t end_copy;
       pi_ram_copy_2d_async(&HyperRam, (uint32_t) (l3_buff+box_y*AT_INPUT_WIDTH_SSD+box_x), (img_plate), \
                            (uint32_t) box_w*box_h, (uint32_t) AT_INPUT_WIDTH_SSD, (uint32_t) box_w, 1, pi_task_block(&end_copy));
@@ -324,13 +328,6 @@ while(1)
       task_resize->arg = &ResizeArg;
       pi_cluster_send_task_to_cl(&cluster_dev, task_resize);
 
-/*    	#ifdef HAVE_LCD
-        buffer_plate.data = img_plate_resized;
-        buffer_plate.stride = 0;
-        pi_buffer_init(&buffer_plate, PI_BUFFER_TYPE_L2, img_plate_resized);
-        pi_buffer_set_stride(&buffer_plate, 0);
-    		pi_display_write(&ili, &buffer_plate, 0, 0, AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR);
-    	#endif*/
       pmsis_l2_malloc_free(img_plate, box_w*box_h*sizeof(char));
       pmsis_l2_malloc_free(task_resize, sizeof(struct pi_cluster_task));
 
@@ -383,6 +380,7 @@ while(1)
       pmsis_l2_malloc_free(out_lpr, 71*88*sizeof(char));
       pmsis_l2_malloc_free(task_recogniction, sizeof(struct pi_cluster_task));
       #ifdef HAVE_LCD
+        PRINTF("%s\n", OUT_CHAR);
         draw_text(&ili, OUT_CHAR, box_x, box_y-10, 2);
       #endif
       #ifdef ONE_ITER
@@ -391,12 +389,15 @@ while(1)
     }
   }
 
+  pi_camera_close(&camera);
+  pi_cluster_close(&cluster_dev);
+
 pmsis_exit(0);
-return 0;
 }
 
 int main(void)
 {
   PRINTF("\n\n\t *** OCR SSD ***\n\n");
-  return pmsis_kickoff((void *) start);
+  pmsis_kickoff((void *) start);
+  return 0;
 }
