@@ -225,15 +225,6 @@ while(1)
         return 1;
       }
     #endif
-    #ifdef HAVE_LCD
-      buffer.data = Input_1;
-      buffer.stride = 0;
-      // WIth Himax, propertly configure the buffer to skip boarder pixels
-      pi_buffer_init(&buffer, PI_BUFFER_TYPE_L2, Input_1);
-      pi_buffer_set_stride(&buffer, 0);
-      pi_buffer_set_format(&buffer, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD, 1, PI_BUFFER_FORMAT_GRAY);
-      pi_display_write(&ili, &buffer, 0, 0, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD);
-    #endif
     for(int i=0; i<AT_INPUT_HEIGHT_SSD*AT_INPUT_WIDTH_SSD; i++){
       Input_1[i] -= 128;
     }
@@ -281,6 +272,21 @@ while(1)
     pmsis_l2_malloc_free(task, sizeof(struct pi_cluster_task));
     pmsis_l2_malloc_free(out_boxes, MAX_BB*sizeof(bbox_t));
 
+    #ifdef HAVE_LCD
+      uint8_t* lcd_buffer = (uint8_t*) pmsis_l2_malloc(AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
+      pi_ram_read(&HyperRam, l3_buff, lcd_buffer, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
+      for(int i=0; i<AT_INPUT_HEIGHT_SSD*AT_INPUT_WIDTH_SSD; i++){
+        lcd_buffer[i] += 128;
+      }
+      buffer.data = lcd_buffer;
+      buffer.stride = 0;
+      // WIth Himax, propertly configure the buffer to skip boarder pixels
+      pi_buffer_init(&buffer, PI_BUFFER_TYPE_L2, lcd_buffer);
+      pi_buffer_set_stride(&buffer, 0);
+      pi_buffer_set_format(&buffer, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD, 1, PI_BUFFER_FORMAT_GRAY);
+      pi_display_write(&ili, &buffer, 0, 0, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD);
+      pmsis_l2_malloc_free(lcd_buffer, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
+    #endif
     if(plate_bbox.alive){
      	int box_x = (int)(FIX2FP(plate_bbox.x,14)*320);
       int box_y = (int)(FIX2FP(plate_bbox.y,14)*240);
