@@ -71,8 +71,9 @@ static int open_display(struct pi_device *device)
 
 void draw_text(struct pi_device *display, const char *str, unsigned posX, unsigned posY, unsigned fontsize)
 {
-    writeFillRect(display, 0, 340, posX, fontsize*8, 0xFFFF);
+    writeFillRect(display, 0, 340, posX, fontsize*10, 0xFFFF);
     setCursor(display, posX, posY);
+    setTextColor(display, 0x03E0);
     writeText(display, str, fontsize);
 }
 #endif
@@ -286,6 +287,7 @@ while(1)
       pi_buffer_set_format(&buffer, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD, 1, PI_BUFFER_FORMAT_GRAY);
       pi_display_write(&ili, &buffer, 0, 0, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD);
       pmsis_l2_malloc_free(lcd_buffer, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
+      draw_text(&ili, OUT_CHAR, 0, 0, 2);
     #endif
     if(plate_bbox.alive){
      	int box_x = (int)(FIX2FP(plate_bbox.x,14)*320);
@@ -300,10 +302,10 @@ while(1)
     	  pmsis_exit(-1);
     	}
       #ifdef HAVE_LCD
-        writeFillRect(&ili, box_x, box_y, 2, box_h, 0xFFFF);
-        writeFillRect(&ili, box_x, box_y, box_w, 2, 0xFFFF);
-        writeFillRect(&ili, box_x, box_y+box_h, box_w, 2, 0xFFFF);
-        writeFillRect(&ili, box_x+box_w, box_y, 2, box_h, 0xFFFF);
+        writeFillRect(&ili, box_x, box_y, 2, box_h, 0x03E0);
+        writeFillRect(&ili, box_x, box_y, box_w, 2, 0x03E0);
+        writeFillRect(&ili, box_x, box_y+box_h, box_w, 2, 0x03E0);
+        writeFillRect(&ili, box_x+box_w, box_y, 2, box_h, 0x03E0);
       #endif
       pi_task_t end_copy;
       pi_ram_copy_2d_async(&HyperRam, (uint32_t) (l3_buff+box_y*AT_INPUT_WIDTH_SSD+box_x), (img_plate), \
@@ -385,10 +387,6 @@ while(1)
       pmsis_l2_malloc_free(img_plate_resized, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
       pmsis_l2_malloc_free(out_lpr, 71*88*sizeof(char));
       pmsis_l2_malloc_free(task_recogniction, sizeof(struct pi_cluster_task));
-      #ifdef HAVE_LCD
-        PRINTF("%s\n", OUT_CHAR);
-        draw_text(&ili, OUT_CHAR, box_x, box_y-10, 2);
-      #endif
       #ifdef ONE_ITER
         break;
       #endif
