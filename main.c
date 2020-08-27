@@ -392,10 +392,6 @@ while(1)
       #endif
     }
   }
-
-  pi_camera_close(&camera);
-  pi_cluster_close(&cluster_dev);
-
 pmsis_exit(0);
 }
 

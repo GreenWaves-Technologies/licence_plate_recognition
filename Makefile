@@ -67,12 +67,18 @@ MODEL_TENSORS = BUILD_MODEL_SSD/ssdlite_ocr_L3_Flash_Const.dat BUILD_MODEL_LPR/l
 READFS_FILES=$(abspath $(MODEL_TENSORS))
 PLPBRIDGE_FLAGS += -f
 
-# all depends on the model
-all::
+ssd_model:
+	make -f ssd.mk model
 
-clean:: #clean_model
+lpr_model:
+	make -f lprnet.mk model
 
-include common/model_rules.mk
+# all depends on the models
+all:: ssd_model lpr_model
+
+clean_models:
+	rm -rf BUILD_MODEL*
+
 $(info APP_SRCS... $(APP_SRCS))
 $(info APP_CFLAGS... $(APP_CFLAGS))
 include $(RULES_DIR)/pmsis_rules.mk
