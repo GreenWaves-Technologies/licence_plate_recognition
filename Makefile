@@ -31,15 +31,15 @@ APP_CFLAGS += -I. -I$(MODEL_COMMON_INC) -I$(TILER_EMU_INC) -I$(TILER_INC) $(CNN_
 APP_SRCS += BUILD_MODEL_SSD/ssdlite_ocrKernels.c BUILD_MODEL_LPR/lprnetKernels.c $(TILER_GENERATOR_PATH)/BilinearResizes/ResizeBasicKernels.c
 APP_CFLAGS += -IBUILD_MODEL_SSD -IBUILD_MODEL_LPR
 
-ifeq ($(platform), gvsoc)
-	APP_CFLAGS += -DHAVE_LCD -DPERF
-else
-	APP_CFLAGS += -DSILENT -DHAVE_HIMAX -DHAVE_LCD
-endif
-
-ONE_ITER?=0
-ifeq ($(ONE_ITER), 1)
+JENKINS?=0
+ifeq ($(JENKINS), 1)
 	APP_CFLAGS += -DONE_ITER
+else
+	ifeq ($(platform), gvsoc)
+		APP_CFLAGS += -DHAVE_LCD -DPERF
+	else
+		APP_CFLAGS += -DSILENT -DHAVE_HIMAX -DHAVE_LCD
+	endif
 endif
 
 CLUSTER_STACK_SIZE=5096
