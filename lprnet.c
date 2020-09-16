@@ -134,7 +134,7 @@ int start()
 	// pmsis_l2_malloc_free(Input_1, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*sizeof(char));
 	PRINTF("Finished reading image\n");
 	//Allocate output buffers:
-	Output_1  = (short int *) pmsis_l2_malloc(71*88);
+	Output_1  = (char *) pmsis_l2_malloc(71*88);
 	if(Output_1==NULL){
 		printf("Error Allocating CNN output buffers");
 		return 1;
@@ -165,7 +165,7 @@ int start()
 		Input_1[i+2*AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR] = temp;
 	}
 	//Allocate output buffers:
-	Output_1  = (short int *)AT_L2_ALLOC(0, 71*88);
+	Output_1  = (char *)AT_L2_ALLOC(0, 71*88);
 	if(Output_1==NULL){
 		printf("Error Allocating CNN output buffers");
 		return 1;
@@ -197,6 +197,7 @@ int start()
 	RunNetwork();
 #endif
 
+#if 0
 #ifdef PERF
 	{
 		unsigned int TotalCycles = 0, TotalOper = 0;
@@ -210,6 +211,7 @@ int start()
 		printf("%45s: Cycles: %10d, Operations: %10d, Operations/Cycle: %f\n", "Total", TotalCycles, TotalOper, ((float) TotalOper)/ TotalCycles);
 		printf("\n");
 	}
+#endif
 #endif
 
 	__PREFIX(CNN_Destruct)();
