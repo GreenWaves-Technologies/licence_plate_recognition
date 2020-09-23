@@ -54,6 +54,10 @@ signed char OUT_CHAR[100];
 
 L2_MEM bbox_t *out_boxes;
 
+#define NUM_STRIPES     88
+#define NUM_CHARS_DICT  71
+#define BLANK_CHAR_IDX  NUM_CHARS_DICT - 1
+#define SCORE_THR       10000
 static char *CHAR_DICT [71] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "<Anhui>", "<Beijing>", "<Chongqing>", "<Fujian>", "<Gansu>", "<Guangdong>", "<Guangxi>", "<Guizhou>", "<Hainan>", "<Hebei>", "<Heilongjiang>", "<Henan>", "<HongKong>", "<Hubei>", "<Hunan>", "<InnerMongolia>", "<Jiangsu>", "<Jiangxi>", "<Jilin>", "<Liaoning>", "<Macau>", "<Ningxia>", "<Qinghai>", "<Shaanxi>", "<Shandong>", "<Shanghai>", "<Shanxi>", "<Sichuan>", "<Tianjin>", "<Tibet>", "<Xinjiang>", "<Yunnan>", "<Zhejiang>", "<police>", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "_"};
 
 #ifdef HAVE_LCD
@@ -118,19 +122,24 @@ static void RunLPRNetwork()
   int end = gap_cl_readhwtimer();
   printf("LPR PERF: %d cycles\n", end - start);
 #endif
-  int max_prob;
-  int predicted_char = 70;
   PRINTF("OUTPUT: \n");
   strcpy(OUT_CHAR, "");
-  for (int i=0; i<88; i++){
+
+  // greed search decoder ALGO
+  int max_prob;
+  int predicted_char = BLANK_CHAR_IDX;
+  int prev_char = BLANK_CHAR_IDX;
+  for (int i=0; i<NUM_STRIPES; i++){
     max_prob = 0x80000000;
-    for (int j=0; j<71; j++){
-      if (out_lpr[i+j*88]>max_prob){
-        max_prob = out_lpr[i+j*88];
+    for (int j=0; j<NUM_CHARS_DICT; j++){
+      if (out_lpr[i+j*NUM_STRIPES]>max_prob){
+        max_prob = out_lpr[i+j*NUM_STRIPES];
         predicted_char = j;
       }
     }
-    if (predicted_char==70) continue;
+    if (predicted_char == BLANK_CHAR_IDX || prev_char == predicted_char) continue;
+    prev_char = predicted_char;
+
     strcat(OUT_CHAR, CHAR_DICT[predicted_char]);
     PRINTF("%s, ", CHAR_DICT[predicted_char]);
   }
@@ -289,12 +298,12 @@ while(1)
       pmsis_l2_malloc_free(lcd_buffer, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
       draw_text(&ili, OUT_CHAR, 0, 0, 2);
     #endif
-    if(plate_bbox.alive){
+    if(plate_bbox.alive && (plate_bbox.score > SCORE_THR)){
      	int box_x = (int)(FIX2FP(plate_bbox.x,14)*320);
       int box_y = (int)(FIX2FP(plate_bbox.y,14)*240);
      	int box_w = (int)(FIX2FP(plate_bbox.w,14)*320);
       int box_h = (int)(FIX2FP(plate_bbox.h,14)*240);
-      PRINTF("BBOX (x, y, w, h): (%d, %d, %d, %d)\n", box_x, box_y, box_w, box_h);
+      PRINTF("BBOX (x, y, w, h): (%d, %d, %d, %d) SCORE: %f\n", box_x, box_y, box_w, box_h, FIX2FP(plate_bbox.score,15));
     	signed char* img_plate = (signed char *) pmsis_l2_malloc(box_w*box_h*sizeof(char));
       img_plate_resized      = (signed char *) pmsis_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
     	if(img_plate==NULL || img_plate_resized==NULL){
@@ -360,10 +369,10 @@ while(1)
       if (__PREFIX2(CNN_Construct)())
       {
         printf("LPR Graph constructor exited with an error\n");
-        return 1;
+        continue;
       }
       PRINTF("Graph constructor was OK\n");
-      out_lpr = (char *) pmsis_l2_malloc(71*88*sizeof(char));
+      out_lpr = (char *) pmsis_l2_malloc(NUM_CHARS_DICT*NUM_STRIPES*sizeof(char));
       if(out_lpr==NULL){
         printf("out_lpr alloc Error!\n");
         pmsis_exit(-1);
@@ -385,7 +394,7 @@ while(1)
       pi_cluster_send_task_to_cl(&cluster_dev, task_recogniction);
       __PREFIX2(CNN_Destruct)();
       pmsis_l2_malloc_free(img_plate_resized, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
-      pmsis_l2_malloc_free(out_lpr, 71*88*sizeof(char));
+      pmsis_l2_malloc_free(out_lpr, NUM_CHARS_DICT*NUM_STRIPES*sizeof(char));
       pmsis_l2_malloc_free(task_recogniction, sizeof(struct pi_cluster_task));
       #ifdef ONE_ITER
         break;
