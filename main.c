@@ -304,8 +304,8 @@ while(1)
      	int box_w = (int)(FIX2FP(plate_bbox.w,14)*320);
       int box_h = (int)(FIX2FP(plate_bbox.h,14)*240);
       PRINTF("BBOX (x, y, w, h): (%d, %d, %d, %d) SCORE: %f\n", box_x, box_y, box_w, box_h, FIX2FP(plate_bbox.score,15));
-    	signed char* img_plate = (signed char *) pmsis_l2_malloc(box_w*box_h*sizeof(char));
       img_plate_resized      = (signed char *) pmsis_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
+      signed char* img_plate = (signed char *) pmsis_l2_malloc(box_w*box_h*sizeof(char));
     	if(img_plate==NULL || img_plate_resized==NULL){
     	  printf("Error allocating image plate buffers\n");
     	  pmsis_exit(-1);
@@ -345,8 +345,8 @@ while(1)
       task_resize->arg = &ResizeArg;
       pi_cluster_send_task_to_cl(&cluster_dev, task_resize);
 
-      pmsis_l2_malloc_free(img_plate, box_w*box_h*sizeof(char));
       pmsis_l2_malloc_free(task_resize, sizeof(struct pi_cluster_task));
+      pmsis_l2_malloc_free(img_plate, box_w*box_h*sizeof(char));
 
       /* Init & open dmacpy. */
       struct pi_dmacpy_conf dmacpy_conf = {0};
@@ -393,9 +393,9 @@ while(1)
       // Execute the function "RunNetwork" on the cluster.
       pi_cluster_send_task_to_cl(&cluster_dev, task_recogniction);
       __PREFIX2(CNN_Destruct)();
-      pmsis_l2_malloc_free(img_plate_resized, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
-      pmsis_l2_malloc_free(out_lpr, NUM_CHARS_DICT*NUM_STRIPES*sizeof(char));
       pmsis_l2_malloc_free(task_recogniction, sizeof(struct pi_cluster_task));
+      pmsis_l2_malloc_free(out_lpr, NUM_CHARS_DICT*NUM_STRIPES*sizeof(char));
+      pmsis_l2_malloc_free(img_plate_resized, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
       #ifdef ONE_ITER
         break;
       #endif
