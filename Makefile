@@ -32,7 +32,7 @@ APP_SRCS += BUILD_MODEL_SSD/ssdlite_ocrKernels.c BUILD_MODEL_LPR/lprnetKernels.c
 APP_CFLAGS += -IBUILD_MODEL_SSD -IBUILD_MODEL_LPR
 
 ifeq ($(platform), gvsoc)
-	APP_CFLAGS += -DHAVE_LCD -DPERF
+	APP_CFLAGS += -DPERF
 else
 	APP_CFLAGS += -DSILENT -DHAVE_HIMAX -DHAVE_LCD
 endif
