@@ -26,7 +26,7 @@ set graph_size_opt 2
 
 ##############################################
 set graph_reorder_constant_in true
-set graph_const_exec_from_flash true
+#set graph_const_exec_from_flash true
 
 ############## PERF COUNTER #################
 #set graph_produce_node_names true

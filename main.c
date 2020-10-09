@@ -144,6 +144,14 @@ static void RunLPRNetwork()
     PRINTF("%s, ", CHAR_DICT[predicted_char]);
   }
   PRINTF("\n");
+  strcat(OUT_CHAR, "\0");
+  #ifdef TEST
+    //test for image: china_1
+    if (strcmp(OUT_CHAR, "<Shandong>Q3X5U3")){
+      printf("Error predicting characters on china_1, should be <Shandong>Q3X5U3\n");
+      pmsis_exit(-1);
+    }
+  #endif
 }
 
 static void Resize(KerResizeBilinear_ArgT *KerArg)
@@ -255,12 +263,13 @@ while(1)
       return 1;
     }
     // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
-    if (__PREFIX1(CNN_Construct)())
+    int ssd_constructor_err = __PREFIX1(CNN_Construct)();
+    if (ssd_constructor_err)
     {
-      printf("SSD Graph constructor exited with an error\n");
+      printf("SSD Graph constructor exited with an error: %d\n", ssd_constructor_err);
       return 1;
     }
-    PRINTF("Graph constructor was OK\n");
+    PRINTF("SSD Graph constructor was OK\n");
 
     /*--------------------------TASK SETUP------------------------------*/
     struct pi_cluster_task *task = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
@@ -316,6 +325,13 @@ while(1)
         writeFillRect(&ili, box_x, box_y+box_h, box_w, 2, 0x03E0);
         writeFillRect(&ili, box_x+box_w, box_y, 2, box_h, 0x03E0);
       #endif
+      #ifdef TEST
+        //test for image: china_1
+        if (!(box_x>72 && box_x<80) || !(box_y>134 && box_y<142) || !(box_w>224 && box_w<232) || !(box_h>76 && box_h<84)){
+          printf("Error in bounding boxes for image china_1.ppm\n");
+          pmsis_exit(-1);
+        }
+      #endif
       pi_task_t end_copy;
       pi_ram_copy_2d_async(&HyperRam, (uint32_t) (l3_buff+box_y*AT_INPUT_WIDTH_SSD+box_x), (img_plate), \
                            (uint32_t) box_w*box_h, (uint32_t) AT_INPUT_WIDTH_SSD, (uint32_t) box_w, 1, pi_task_block(&end_copy));
@@ -366,12 +382,13 @@ while(1)
       }
 
       // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
-      if (__PREFIX2(CNN_Construct)())
+      int lpr_constructor_err = __PREFIX2(CNN_Construct)();
+      if (lpr_constructor_err)
       {
-        printf("LPR Graph constructor exited with an error\n");
+        printf("LPR Graph constructor exited with an error: %d\n", lpr_constructor_err);
         continue;
       }
-      PRINTF("Graph constructor was OK\n");
+      PRINTF("LPR Graph constructor was OK\n");
       out_lpr = (char *) pmsis_l2_malloc(NUM_CHARS_DICT*NUM_STRIPES*sizeof(char));
       if(out_lpr==NULL){
         printf("out_lpr alloc Error!\n");
@@ -396,7 +413,7 @@ while(1)
       pmsis_l2_malloc_free(task_recogniction, sizeof(struct pi_cluster_task));
       pmsis_l2_malloc_free(out_lpr, NUM_CHARS_DICT*NUM_STRIPES*sizeof(char));
       pmsis_l2_malloc_free(img_plate_resized, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
-      #ifdef ONE_ITER
+      #if defined (ONE_ITER) || defined (TEST)
         break;
       #endif
     }

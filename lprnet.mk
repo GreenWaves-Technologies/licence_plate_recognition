@@ -23,7 +23,7 @@ NNTOOL_SCRIPT=model/nntool_script_lprnet
 TRAINED_TFLITE_MODEL=model/$(MODEL_PREFIX_LPR).tflite
 MODEL_PREFIX=$(MODEL_PREFIX_LPR)
 MODEL_SUFFIX=_LPR
-IMAGE=$(CURDIR)/images/lpcropped_gray.ppm
+IMAGE=$(CURDIR)/images/china_1_cropped.ppm
 MAIN=$(MODEL_PREFIX_LPR).c
 
 MODEL_QUANTIZED = 1
@@ -34,7 +34,7 @@ MODEL_GENFLAGS_EXTRA+=
 # Here we set the memory allocation for the generated kernels
 # REMEMBER THAT THE L1 MEMORY ALLOCATION MUST INCLUDE SPACE
 # FOR ALLOCATED STACKS!
-CLUSTER_STACK_SIZE=5096
+CLUSTER_STACK_SIZE=6096
 CLUSTER_SLAVE_STACK_SIZE=1024
 TOTAL_STACK_SIZE=$(shell expr $(CLUSTER_STACK_SIZE) \+ $(CLUSTER_SLAVE_STACK_SIZE) \* 7)
 ifeq '$(TARGET_CHIP_FAMILY)' 'GAP9'
@@ -86,7 +86,7 @@ PLPBRIDGE_FLAGS += -f
 # all depends on the model
 all:: model
 
-clean:: clean_model
+clean:: #clean_model
 
 at_model_disp:: $(MODEL_BUILD) $(MODEL_GEN_EXE)
 	$(MODEL_GEN_EXE) -o $(MODEL_BUILD) -c $(MODEL_BUILD) $(MODEL_GEN_EXTRA_FLAGS) --debug=Disp

@@ -70,22 +70,6 @@ int start()
     pi_gpio_pin_write(NULL, PI_GPIO_A0_PAD_8_A4, 0);
     #endif
 
-	// /* Init & open ram. */
-	// struct pi_hyperram_conf hyper_conf;
-	// pi_hyperram_conf_init(&hyper_conf);
-	// pi_open_from_conf(&HyperRam, &hyper_conf);
-	// if (pi_ram_open(&HyperRam))
-	// {
-	// 	printf("Error ram open !\n");
-	// 	pmsis_exit(-3);
-	// }
-
-	// if (pi_ram_alloc(&HyperRam, &l3_buff, (uint32_t) AT_INPUT_SIZE))
-	// {
-	// 	printf("Ram malloc failed !\n");
-	// 	pmsis_exit(-4);
-	// }
-
 	pi_freq_set(PI_FREQ_DOMAIN_CL, FREQ_CL*1000*1000);
 	pi_freq_set(PI_FREQ_DOMAIN_FC, FREQ_FC*1000*1000);
 
@@ -111,27 +95,9 @@ int start()
 	}
 	for(int i=0; i<AT_INPUT_HEIGHT_SSD*AT_INPUT_WIDTH_SSD; i++){
 		Input_1[i] -= 128;
+		Input_1[i+AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR] = Input_1[i];
+		Input_1[i+2*AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR] = Input_1[i];
 	}
-	/* Init & open dmacpy. */
-    struct pi_dmacpy_conf dmacpy_conf = {0};
-    pi_dmacpy_conf_init(&dmacpy_conf);
-    pi_open_from_conf(&dmacpy, &dmacpy_conf);
-    int errors = pi_dmacpy_open(&dmacpy);
-    if (errors)
-    {
-      printf("Error dmacpy open : %ld !\n", errors);
-      pmsis_exit(-3);
-    }
-    // /* Copy buffer from L2 to L2. */
-    errors = pi_dmacpy_copy(&dmacpy, (void *) Input_1, (void *) Input_1 + AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, PI_DMACPY_L2_L2);
-    errors = pi_dmacpy_copy(&dmacpy, (void *) Input_1, (void *) Input_1 + 2*AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, PI_DMACPY_L2_L2);
-    if(errors){
-      printf("Copy from L2 to L2 failed : %ld\n", errors); pmsis_exit(-5);
-    }
-	// pi_ram_write(&HyperRam, l3_buff                                         , Input_1, (uint32_t) AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR);
-	// pi_ram_write(&HyperRam, l3_buff+AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR  , Input_1, (uint32_t) AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR);
-	// pi_ram_write(&HyperRam, l3_buff+2*AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, Input_1, (uint32_t) AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR);
-	// pmsis_l2_malloc_free(Input_1, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*sizeof(char));
 	PRINTF("Finished reading image\n");
 	//Allocate output buffers:
 	Output_1  = (char *) pmsis_l2_malloc(71*88);
@@ -139,18 +105,6 @@ int start()
 		printf("Error Allocating CNN output buffers");
 		return 1;
 	}
-	/*--------------------------TASK SETUP------------------------------*/
-	struct pi_cluster_task *task = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
-	if(task==NULL) {
-		printf("pi_cluster_task alloc Error!\n");
-		pmsis_exit(-1);
-	}
-	PRINTF("Stack size is %d and %d\n",STACK_SIZE,SLAVE_STACK_SIZE );
-	memset(task, 0, sizeof(struct pi_cluster_task));
-	task->entry = &RunNetwork;
-	task->stack_size = STACK_SIZE;
-	task->slave_stack_size = SLAVE_STACK_SIZE;
-	task->arg = NULL;
 #else
 	/*--------------- in emul mode the model has the formatter ---------- */
 	PRINTF("Reading image\n");
@@ -181,6 +135,19 @@ int start()
 	PRINTF("Graph constructor was OK\n");
 
 #ifndef __EMUL__
+	/*--------------------------TASK SETUP------------------------------*/
+	struct pi_cluster_task *task = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
+	if(task==NULL) {
+		printf("pi_cluster_task alloc Error!\n");
+		pmsis_exit(-1);
+	}
+	PRINTF("Stack size is %d and %d\n",STACK_SIZE,SLAVE_STACK_SIZE );
+	memset(task, 0, sizeof(struct pi_cluster_task));
+	task->entry = &RunNetwork;
+	task->stack_size = STACK_SIZE;
+	task->slave_stack_size = SLAVE_STACK_SIZE;
+	task->arg = NULL;
+
 	#ifdef MEASUREMENTS
 	for (int i=0; i<1000; i++){
 		pi_time_wait_us(50000);
