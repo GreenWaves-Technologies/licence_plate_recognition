@@ -54,6 +54,10 @@ signed char OUT_CHAR[100];
 
 L2_MEM bbox_t *out_boxes;
 
+#define NUM_STRIPES     88
+#define NUM_CHARS_DICT  71
+#define BLANK_CHAR_IDX  NUM_CHARS_DICT - 1
+#define SCORE_THR       10000
 static char *CHAR_DICT [71] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "<Anhui>", "<Beijing>", "<Chongqing>", "<Fujian>", "<Gansu>", "<Guangdong>", "<Guangxi>", "<Guizhou>", "<Hainan>", "<Hebei>", "<Heilongjiang>", "<Henan>", "<HongKong>", "<Hubei>", "<Hunan>", "<InnerMongolia>", "<Jiangsu>", "<Jiangxi>", "<Jilin>", "<Liaoning>", "<Macau>", "<Ningxia>", "<Qinghai>", "<Shaanxi>", "<Shandong>", "<Shanghai>", "<Shanxi>", "<Sichuan>", "<Tianjin>", "<Tibet>", "<Xinjiang>", "<Yunnan>", "<Zhejiang>", "<police>", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "_"};
 
 #ifdef HAVE_LCD
@@ -118,23 +122,36 @@ static void RunLPRNetwork()
   int end = gap_cl_readhwtimer();
   printf("LPR PERF: %d cycles\n", end - start);
 #endif
-  int max_prob;
-  int predicted_char = 70;
   PRINTF("OUTPUT: \n");
   strcpy(OUT_CHAR, "");
-  for (int i=0; i<88; i++){
+
+  // greed search decoder ALGO
+  int max_prob;
+  int predicted_char = BLANK_CHAR_IDX;
+  int prev_char = BLANK_CHAR_IDX;
+  for (int i=0; i<NUM_STRIPES; i++){
     max_prob = 0x80000000;
-    for (int j=0; j<71; j++){
-      if (out_lpr[i+j*88]>max_prob){
-        max_prob = out_lpr[i+j*88];
+    for (int j=0; j<NUM_CHARS_DICT; j++){
+      if (out_lpr[i+j*NUM_STRIPES]>max_prob){
+        max_prob = out_lpr[i+j*NUM_STRIPES];
         predicted_char = j;
       }
     }
-    if (predicted_char==70) continue;
+    if (predicted_char == BLANK_CHAR_IDX || prev_char == predicted_char) continue;
+    prev_char = predicted_char;
+
     strcat(OUT_CHAR, CHAR_DICT[predicted_char]);
     PRINTF("%s, ", CHAR_DICT[predicted_char]);
   }
   PRINTF("\n");
+  strcat(OUT_CHAR, "\0");
+  #ifdef TEST
+    //test for image: china_1
+    if (strcmp(OUT_CHAR, "<Shandong>Q3X5U3")){
+      printf("Error predicting characters on china_1, should be <Shandong>Q3X5U3\n");
+      pmsis_exit(-1);
+    }
+  #endif
 }
 
 static void Resize(KerResizeBilinear_ArgT *KerArg)
@@ -246,12 +263,13 @@ while(1)
       return 1;
     }
     // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
-    if (__PREFIX1(CNN_Construct)())
+    int ssd_constructor_err = __PREFIX1(CNN_Construct)();
+    if (ssd_constructor_err)
     {
-      printf("SSD Graph constructor exited with an error\n");
+      printf("SSD Graph constructor exited with an error: %d\n", ssd_constructor_err);
       return 1;
     }
-    PRINTF("Graph constructor was OK\n");
+    PRINTF("SSD Graph constructor was OK\n");
 
     /*--------------------------TASK SETUP------------------------------*/
     struct pi_cluster_task *task = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
@@ -289,14 +307,14 @@ while(1)
       pmsis_l2_malloc_free(lcd_buffer, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
       draw_text(&ili, OUT_CHAR, 0, 0, 2);
     #endif
-    if(plate_bbox.alive){
+    if(plate_bbox.alive && (plate_bbox.score > SCORE_THR)){
      	int box_x = (int)(FIX2FP(plate_bbox.x,14)*320);
       int box_y = (int)(FIX2FP(plate_bbox.y,14)*240);
      	int box_w = (int)(FIX2FP(plate_bbox.w,14)*320);
       int box_h = (int)(FIX2FP(plate_bbox.h,14)*240);
-      PRINTF("BBOX (x, y, w, h): (%d, %d, %d, %d)\n", box_x, box_y, box_w, box_h);
-    	signed char* img_plate = (signed char *) pmsis_l2_malloc(box_w*box_h*sizeof(char));
+      PRINTF("BBOX (x, y, w, h): (%d, %d, %d, %d) SCORE: %f\n", box_x, box_y, box_w, box_h, FIX2FP(plate_bbox.score,15));
       img_plate_resized      = (signed char *) pmsis_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
+      signed char* img_plate = (signed char *) pmsis_l2_malloc(box_w*box_h*sizeof(char));
     	if(img_plate==NULL || img_plate_resized==NULL){
     	  printf("Error allocating image plate buffers\n");
     	  pmsis_exit(-1);
@@ -306,6 +324,13 @@ while(1)
         writeFillRect(&ili, box_x, box_y, box_w, 2, 0x03E0);
         writeFillRect(&ili, box_x, box_y+box_h, box_w, 2, 0x03E0);
         writeFillRect(&ili, box_x+box_w, box_y, 2, box_h, 0x03E0);
+      #endif
+      #ifdef TEST
+        //test for image: china_1
+        if (!(box_x>72 && box_x<80) || !(box_y>134 && box_y<142) || !(box_w>224 && box_w<232) || !(box_h>76 && box_h<84)){
+          printf("Error in bounding boxes for image china_1.ppm\n");
+          pmsis_exit(-1);
+        }
       #endif
       pi_task_t end_copy;
       pi_ram_copy_2d_async(&HyperRam, (uint32_t) (l3_buff+box_y*AT_INPUT_WIDTH_SSD+box_x), (img_plate), \
@@ -336,8 +361,8 @@ while(1)
       task_resize->arg = &ResizeArg;
       pi_cluster_send_task_to_cl(&cluster_dev, task_resize);
 
-      pmsis_l2_malloc_free(img_plate, box_w*box_h*sizeof(char));
       pmsis_l2_malloc_free(task_resize, sizeof(struct pi_cluster_task));
+      pmsis_l2_malloc_free(img_plate, box_w*box_h*sizeof(char));
 
       /* Init & open dmacpy. */
       struct pi_dmacpy_conf dmacpy_conf = {0};
@@ -357,13 +382,14 @@ while(1)
       }
 
       // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
-      if (__PREFIX2(CNN_Construct)())
+      int lpr_constructor_err = __PREFIX2(CNN_Construct)();
+      if (lpr_constructor_err)
       {
-        printf("LPR Graph constructor exited with an error\n");
-        return 1;
+        printf("LPR Graph constructor exited with an error: %d\n", lpr_constructor_err);
+        continue;
       }
-      PRINTF("Graph constructor was OK\n");
-      out_lpr = (char *) pmsis_l2_malloc(71*88*sizeof(char));
+      PRINTF("LPR Graph constructor was OK\n");
+      out_lpr = (char *) pmsis_l2_malloc(NUM_CHARS_DICT*NUM_STRIPES*sizeof(char));
       if(out_lpr==NULL){
         printf("out_lpr alloc Error!\n");
         pmsis_exit(-1);
@@ -384,10 +410,10 @@ while(1)
       // Execute the function "RunNetwork" on the cluster.
       pi_cluster_send_task_to_cl(&cluster_dev, task_recogniction);
       __PREFIX2(CNN_Destruct)();
-      pmsis_l2_malloc_free(img_plate_resized, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
-      pmsis_l2_malloc_free(out_lpr, 71*88*sizeof(char));
       pmsis_l2_malloc_free(task_recogniction, sizeof(struct pi_cluster_task));
-      #ifdef ONE_ITER
+      pmsis_l2_malloc_free(out_lpr, NUM_CHARS_DICT*NUM_STRIPES*sizeof(char));
+      pmsis_l2_malloc_free(img_plate_resized, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
+      #if defined (ONE_ITER) || defined (TEST)
         break;
       #endif
     }

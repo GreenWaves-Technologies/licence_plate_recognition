@@ -1,19 +1,22 @@
 adjust
 fusions --scale8
 #imageformat input_1 rgb888 offset_int8
+
 #nodeoption 1 PARALLELFEATURES 0
-#nodeoption 2 PARALLELFEATURES 0
-#nodeoption 3 PARALLELFEATURES 0
-#nodeoption 7 PARALLELFEATURES 0
-#nodeoption 11 PARALLELFEATURES 0
+nodeoption 2 PARALLELFEATURES 0
+nodeoption 3 PARALLELFEATURES 0
+nodeoption 7 PARALLELFEATURES 0
+nodeoption 11 PARALLELFEATURES 0
 
 set l2_ram_ext_managed false
-set graph_const_exec_from_flash true
-set graph_reorder_constant_in true
-
+#set graph_reorder_constant_in false
+#set graph_const_exec_from_flash true
 set graph_size_opt 2
+
 #set graph_produce_node_names true
 #set graph_produce_operinfos true
 #set graph_monitor_cycles true
+
 #set graph_dump_tensor 7
+#set graph_trace_exec true
 save_state
