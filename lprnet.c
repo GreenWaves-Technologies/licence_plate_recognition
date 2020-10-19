@@ -70,15 +70,15 @@ int start()
     pi_gpio_pin_write(NULL, PI_GPIO_A0_PAD_8_A4, 0);
     #endif
 
-	pi_freq_set(PI_FREQ_DOMAIN_CL, FREQ_CL*1000*1000);
-	pi_freq_set(PI_FREQ_DOMAIN_FC, FREQ_FC*1000*1000);
-
 	/*-----------------------OPEN THE CLUSTER--------------------------*/
 	struct pi_device cluster_dev;
 	struct pi_cluster_conf conf;
 	pi_cluster_conf_init(&conf);
 	pi_open_from_conf(&cluster_dev, (void *)&conf);
 	pi_cluster_open(&cluster_dev);
+
+	pi_freq_set(PI_FREQ_DOMAIN_CL, FREQ_CL*1000*1000);
+	pi_freq_set(PI_FREQ_DOMAIN_FC, FREQ_FC*1000*1000);
 
 	char *ImageName = __XSTR(AT_IMAGE);
 	//Reading Image from Bridge
@@ -94,19 +94,13 @@ int start()
 		return 1;
 	}
 	for(int i=0; i<AT_INPUT_HEIGHT_SSD*AT_INPUT_WIDTH_SSD; i++){
-		Input_1[i] -= 128;
-		Input_1[i+AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR] = Input_1[i];
-		Input_1[i+2*AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR] = Input_1[i];
+		int temp = Input_1[i] - 128;
+		Input_1[i] = temp;
+		Input_1[i+AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR] = temp;
+		Input_1[i+2*AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR] = temp;
 	}
 	PRINTF("Finished reading image\n");
-	//Allocate output buffers:
-	Output_1  = (char *) pmsis_l2_malloc(71*88);
-	if(Output_1==NULL){
-		printf("Error Allocating CNN output buffers");
-		return 1;
-	}
 #else
-	/*--------------- in emul mode the model has the formatter ---------- */
 	PRINTF("Reading image\n");
 	if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR, 1, Input_1, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*sizeof(char), IMGIO_OUTPUT_CHAR, 0)) {
 		printf("Failed to load image %s\n", ImageName);
@@ -118,13 +112,13 @@ int start()
 		Input_1[i+AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR]   = temp;
 		Input_1[i+2*AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR] = temp;
 	}
+#endif
 	//Allocate output buffers:
 	Output_1  = (char *)AT_L2_ALLOC(0, 71*88);
 	if(Output_1==NULL){
 		printf("Error Allocating CNN output buffers");
 		return 1;
 	}
-#endif
 
 	// IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
 	if (__PREFIX(CNN_Construct)())

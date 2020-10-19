@@ -22,7 +22,7 @@ nodeoption 110 PARALLELFEATURES 0
 
 nodeoption 48 OUT_HOME_MEM_LOC AT_MEM_L3_HRAM
 nodeoption 48 OUT_EXEC_MEM_LOC AT_MEM_L3_HRAM
-set graph_size_opt 2
+#set graph_size_opt 2
 
 ##############################################
 set graph_reorder_constant_in false

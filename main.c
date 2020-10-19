@@ -364,6 +364,20 @@ while(1)
       pmsis_l2_malloc_free(task_resize, sizeof(struct pi_cluster_task));
       pmsis_l2_malloc_free(img_plate, box_w*box_h*sizeof(char));
 
+      #ifdef DUMP_RESIZED
+        printf("\n\n(%d, %d)\n", box_w, box_h);
+        for (int i=0; i<box_h; i++){
+          for (int j=0; j<box_w; j++){
+            printf("%d, ", img_plate[i*box_w+j]);
+          }
+        }
+        printf("\n\n\n");
+        for (int i=0; i<AT_INPUT_HEIGHT_LPR; i++){
+          for (int j=0; j<AT_INPUT_WIDTH_LPR; j++){
+            printf("%d, ", img_plate_resized[i*AT_INPUT_WIDTH_LPR+j]);
+          }
+        }
+      #endif
       /* Init & open dmacpy. */
       struct pi_dmacpy_conf dmacpy_conf = {0};
       pi_dmacpy_conf_init(&dmacpy_conf);
