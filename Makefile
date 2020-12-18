@@ -12,6 +12,11 @@ include common.mk
 
 io=host
 
+USE_CAMERA?=0
+USE_LCD?=0
+SILENT?=0
+SHOW_PERF?=1
+
 MEAS?=0
 QUANT_BITS=8
 MODEL_SQ8=1
@@ -31,12 +36,13 @@ APP_CFLAGS += -I. -I$(MODEL_COMMON_INC) -I$(TILER_EMU_INC) -I$(TILER_INC) $(CNN_
 APP_SRCS += BUILD_MODEL_SSD/ssdlite_ocrKernels.c BUILD_MODEL_LPR/lprnetKernels.c $(TILER_GENERATOR_PATH)/BilinearResizes/ResizeBasicKernels.c
 APP_CFLAGS += -IBUILD_MODEL_SSD -IBUILD_MODEL_LPR
 
+
 JENKINS?=0
 ifeq ($(JENKINS), 1)
 	APP_CFLAGS += -DONE_ITER -DTEST
 else
 	ifeq ($(platform), gvsoc)
-		APP_CFLAGS += -DHAVE_LCD -DPERF
+		APP_CFLAGS += -DPERF -DONE_ITER
 	else
 		APP_CFLAGS += -DSILENT -DHAVE_HIMAX -DHAVE_LCD
 	endif
