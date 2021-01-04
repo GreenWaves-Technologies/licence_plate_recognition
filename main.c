@@ -101,7 +101,7 @@ static void RunSSDNetwork()
   gap_cl_resethwtimer();
   int start = gap_cl_readhwtimer();
 #endif
-  __PREFIX1(CNN)(l3_buff, out_boxes);
+  __PREFIX1(CNN)((signed char *) l3_buff, (signed short *) out_boxes);
 #ifdef PERF
   int end = gap_cl_readhwtimer();
   printf("SSD PERF: %d cycles\n", end - start);
@@ -257,7 +257,7 @@ while(1)
     PRINTF("Finished reading image\n");
 
     //Allocate output buffers:
-    out_boxes = (short int *) pmsis_l2_malloc(MAX_BB*sizeof(bbox_t));
+    out_boxes = (bbox_t *) pmsis_l2_malloc(MAX_BB*sizeof(bbox_t));
     if(out_boxes==NULL){
       printf("Error Allocating CNN output buffers");
       return 1;
