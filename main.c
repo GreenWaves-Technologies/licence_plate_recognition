@@ -327,7 +327,7 @@ while(1)
       #endif
       #ifdef TEST
         //test for image: china_1
-        if (!(box_x>72 && box_x<80) || !(box_y>134 && box_y<142) || !(box_w>224 && box_w<232) || !(box_h>76 && box_h<84)){
+        if (!(box_x>65 && box_x<80) || !(box_y>130 && box_y<145) || !(box_w>224 && box_w<244) || !(box_h>75 && box_h<90)){
           printf("Error in bounding boxes for image china_1.ppm\n");
           pmsis_exit(-1);
         }
