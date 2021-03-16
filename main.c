@@ -101,7 +101,7 @@ static void RunSSDNetwork()
   gap_cl_resethwtimer();
   int start = gap_cl_readhwtimer();
 #endif
-  __PREFIX1(CNN)(l3_buff, out_boxes);
+  __PREFIX1(CNN)((signed char *) l3_buff, (signed short *) out_boxes);
 #ifdef PERF
   int end = gap_cl_readhwtimer();
   printf("SSD PERF: %d cycles\n", end - start);
@@ -257,7 +257,7 @@ while(1)
     PRINTF("Finished reading image\n");
 
     //Allocate output buffers:
-    out_boxes = (short int *) pmsis_l2_malloc(MAX_BB*sizeof(bbox_t));
+    out_boxes = (bbox_t *) pmsis_l2_malloc(MAX_BB*sizeof(bbox_t));
     if(out_boxes==NULL){
       printf("Error Allocating CNN output buffers");
       return 1;
@@ -327,7 +327,7 @@ while(1)
       #endif
       #ifdef TEST
         //test for image: china_1
-        if (!(box_x>72 && box_x<80) || !(box_y>134 && box_y<142) || !(box_w>224 && box_w<232) || !(box_h>76 && box_h<84)){
+        if (!(box_x>65 && box_x<80) || !(box_y>130 && box_y<145) || !(box_w>224 && box_w<244) || !(box_h>75 && box_h<90)){
           printf("Error in bounding boxes for image china_1.ppm\n");
           pmsis_exit(-1);
         }

@@ -292,6 +292,9 @@ int start()
   AT_L2_FREE(0, out_boxes, MAX_BB*sizeof(bbox_t));
   PRINTF("Ended\n");
 #ifndef __EMUL__
+  #ifdef PERF
+    break;
+  #endif
 }
   pmsis_exit(0);
 #endif
