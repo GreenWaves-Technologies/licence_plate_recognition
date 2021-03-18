@@ -39,7 +39,9 @@
 AT_HYPERFLASH_FS_EXT_ADDR_TYPE __PREFIX1(_L3_Flash) = 0;
 AT_HYPERFLASH_FS_EXT_ADDR_TYPE __PREFIX2(_L3_Flash) = 0;
 
+#ifndef __GAP9__
 static struct pi_device dmacpy;
+#endif
 struct pi_device camera;
 struct pi_device HyperRam;
 struct pi_device ili;
@@ -378,6 +380,10 @@ while(1)
           }
         }
       #endif
+      #ifdef __GAP9__
+      memcpy((void *) img_plate_resized+AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR,   (void *) img_plate_resized, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR);
+      memcpy((void *) img_plate_resized+2*AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR, (void *) img_plate_resized, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR);
+      #else
       /* Init & open dmacpy. */
       struct pi_dmacpy_conf dmacpy_conf = {0};
       pi_dmacpy_conf_init(&dmacpy_conf);
@@ -394,6 +400,7 @@ while(1)
       if(errors){
         printf("Copy from L2 to L2 failed : %ld\n", errors); pmsis_exit(-5);
       }
+      #endif
 
       // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
       int lpr_constructor_err = __PREFIX2(CNN_Construct)();
