@@ -28,14 +28,16 @@ MAIN?=main.c
 include common/model_decl.mk
 
 APP = OCRssd
+
 APP_SRCS += $(MAIN) $(MODEL_COMMON_SRCS) $(CNN_LIB)
+APP_SRCS += BUILD_MODEL_SSD/ssdlite_ocrKernels.c BUILD_MODEL_LPR/lprnetKernels.c 
 
 APP_CFLAGS += -O3
 APP_CFLAGS += -I. -I$(MODEL_COMMON_INC) -I$(TILER_EMU_INC) -I$(TILER_INC) $(CNN_LIB_INCLUDE)
-
-APP_SRCS += BUILD_MODEL_SSD/ssdlite_ocrKernels.c BUILD_MODEL_LPR/lprnetKernels.c 
 APP_CFLAGS += -IBUILD_MODEL_SSD -IBUILD_MODEL_LPR
 
+
+PMSIS_OS=pulpos
 
 JENKINS?=0
 ifeq ($(JENKINS), 1)
@@ -73,14 +75,19 @@ MODEL_TENSORS = BUILD_MODEL_SSD/ssdlite_ocr_L3_Flash_Const.dat BUILD_MODEL_LPR/l
 READFS_FILES=$(abspath $(MODEL_TENSORS))
 PLPBRIDGE_FLAGS += -f
 
-ssd_model:
+
+
+BUILD_MODEL_SSD/ssdlite_ocrKernels.c: 
 	make -f ssd.mk model
 
-lpr_model:
+BUILD_MODEL_LPR/lprnetKernels.c: 
 	make -f lprnet.mk model
 
 # all depends on the models
-all:: ssd_model lpr_model
+all:: BUILD_MODEL_SSD/ssdlite_ocrKernels.c BUILD_MODEL_LPR/lprnetKernels.c
+
+clean::
+	rm -rf BUILD
 
 clean_models:
 	rm -rf BUILD_MODEL*
