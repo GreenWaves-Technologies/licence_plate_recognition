@@ -13,18 +13,6 @@ else
   MODEL_TRAIN_FLAGS =
 endif
 
-ifdef MODEL_SQ8
-  CNN_GEN = $(MODEL_GEN_SQ8)
-  CNN_GEN_INCLUDE = $(MODEL_GEN_INCLUDE_SQ8)
-  CNN_LIB = $(MODEL_LIB_SQ8)
-  CNN_LIB_INCLUDE = $(MODEL_LIB_INCLUDE_SQ8)
-else
-  CNN_GEN = $(MODEL_GEN_POW2)
-  CNN_GEN_INCLUDE = $(MODEL_GEN_INCLUDE_POW2)
-  CNN_LIB = $(MODEL_LIB_POW2)
-  CNN_LIB_INCLUDE = $(MODEL_LIB_INCLUDE_POW2)
-endif
-
 USE_DISP=1
 
 ifdef USE_DISP
@@ -91,6 +79,10 @@ model: $(MODEL_GEN_C)
 clean_model:
 	$(RM) $(MODEL_GEN_EXE)
 	$(RM) -rf $(MODEL_BUILD)
+	$(RM) $(MODEL_BUILD)/*.dat
+
+clean_at_model:
+	$(RM) $(MODEL_GEN_C)
 	$(RM) $(MODEL_BUILD)/*.dat
 
 clean_train:
