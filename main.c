@@ -25,6 +25,13 @@
 
 #include "gaplib/ImgIO.h"
 
+#ifdef TEST
+  #define BOX_X 137
+  #define BOX_Y 80
+  #define BOX_W 82
+  #define BOX_H 225
+#endif
+
 #define __XSTR(__s) __STR(__s)
 #define __STR(__s) #__s
 
@@ -329,7 +336,7 @@ while(1)
       #endif
       #ifdef TEST
         //test for image: china_1
-        if (!(box_x>65 && box_x<80) || !(box_y>130 && box_y<145) || !(box_w>224 && box_w<244) || !(box_h>75 && box_h<90)){
+        if (!(box_x>(BOX_X-10) && box_x<(BOX_X+10)) || !(box_y>(BOX_Y-10) && box_y<(BOX_X+10)) || !(box_w>(BOX_W-10) && box_w<(BOX_W+10)) || !(box_h>(BOX_H-10) && box_h<(BOX_H+10))){
           printf("Error in bounding boxes for image china_1.ppm\n");
           pmsis_exit(-1);
         }
