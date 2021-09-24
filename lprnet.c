@@ -93,7 +93,7 @@ int start()
 		printf("Failed to load image %s\n", ImageName);
 		return 1;
 	}
-	for(int i=0; i<AT_INPUT_HEIGHT_SSD*AT_INPUT_WIDTH_SSD; i++){
+	for(int i=0; i<AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR; i++){
 		int temp = Input_1[i] - 128;
 		Input_1[i] = temp;
 		Input_1[i+AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR] = temp;
