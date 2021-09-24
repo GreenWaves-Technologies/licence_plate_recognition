@@ -31,6 +31,8 @@ MODEL_QUANTIZED = 1
 include common/model_decl.mk
 
 MODEL_GENFLAGS_EXTRA+=
+NNTOOL_EXTRA_FLAGS += --use_hard_sigmoid
+
 # Here we set the memory allocation for the generated kernels
 # REMEMBER THAT THE L1 MEMORY ALLOCATION MUST INCLUDE SPACE
 # FOR ALLOCATED STACKS!
