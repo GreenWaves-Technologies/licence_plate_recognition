@@ -251,7 +251,7 @@ while(1)
       PRINTF("Reading image\n");
       if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD, 1, Input_1, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char), IMGIO_OUTPUT_CHAR, 0)) {
         printf("Failed to load image %s\n", ImageName);
-        return 1;
+        pmsis_exit(-1);
       }
     #endif
     for(int i=0; i<AT_INPUT_HEIGHT_SSD*AT_INPUT_WIDTH_SSD; i++){
@@ -272,7 +272,7 @@ while(1)
     if (ssd_constructor_err)
     {
       printf("SSD Graph constructor exited with an error: %d\n", ssd_constructor_err);
-      return 1;
+      pmsis_exit(-1);
     }
     PRINTF("SSD Graph constructor was OK\n");
 
@@ -449,6 +449,5 @@ pmsis_exit(0);
 int main(void)
 {
   PRINTF("\n\n\t *** OCR SSD ***\n\n");
-  pmsis_kickoff((void *) start);
-  return 0;
+  return pmsis_kickoff((void *) start);
 }
