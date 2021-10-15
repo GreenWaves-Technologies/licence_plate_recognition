@@ -312,10 +312,10 @@ while(1)
       draw_text(&ili, OUT_CHAR, 0, 0, 2);
     #endif
     if(out_scores[0] > SCORE_THR){
-      int box_y_min = (int)(FIX2FP(out_boxes[0]*S292_Op_output_1_OUT_QSCALE,S292_Op_output_1_OUT_QNORM)*240);
-     	int box_x_min = (int)(FIX2FP(out_boxes[1]*S292_Op_output_1_OUT_QSCALE,S292_Op_output_1_OUT_QNORM)*320);
-      int box_y_max = (int)(FIX2FP(out_boxes[2]*S292_Op_output_1_OUT_QSCALE,S292_Op_output_1_OUT_QNORM)*240);
-     	int box_x_max = (int)(FIX2FP(out_boxes[3]*S292_Op_output_1_OUT_QSCALE,S292_Op_output_1_OUT_QNORM)*320);
+      int box_y_min = (int)(FIX2FP(out_boxes[0]*ssdlite_ocr_Output_1_OUT_QSCALE,ssdlite_ocr_Output_1_OUT_QNORM)*240);
+     	int box_x_min = (int)(FIX2FP(out_boxes[1]*ssdlite_ocr_Output_1_OUT_QSCALE,ssdlite_ocr_Output_1_OUT_QNORM)*320);
+      int box_y_max = (int)(FIX2FP(out_boxes[2]*ssdlite_ocr_Output_1_OUT_QSCALE,ssdlite_ocr_Output_1_OUT_QNORM)*240);
+     	int box_x_max = (int)(FIX2FP(out_boxes[3]*ssdlite_ocr_Output_1_OUT_QSCALE,ssdlite_ocr_Output_1_OUT_QNORM)*320);
       int box_h = box_y_max - box_y_min;
       int box_w = box_x_max - box_x_min;
       //PRINTF("BBOX (x, y, w, h): (%d, %d, %d, %d) SCORE: %f\n", out_boxes[0], out_boxes[1], out_boxes[2], out_boxes[3], FIX2FP(out_scores[0],7));
