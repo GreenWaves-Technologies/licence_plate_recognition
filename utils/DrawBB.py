@@ -31,7 +31,7 @@ draw = ImageDraw.Draw(img_in)
 
 # Copy Paste code here:
 #draw.rectangle((ymin, xmin, ymax, xmax), outline=(255, 255, 0))
-draw.rectangle((73, 137, 73+234, 137+82), outline=(255, 255, 0))
+draw.rectangle((80, 137, 80+225, 137+82), outline=(255, 255, 0))
 
 
 ################################

@@ -13,6 +13,7 @@
 #include "ssdlite_ocrKernels.h"
 #include "lprnetKernels.h"
 #include "ResizeBasicKernels.h"
+#include "ssdlite_ocrInfo.h"
 
 #include "pmsis.h"
 #include "bsp/bsp.h"
@@ -24,6 +25,13 @@
 #include "bsp/camera/himax.h"
 
 #include "gaplib/ImgIO.h"
+
+#ifdef TEST
+  #define BOX_Y 137
+  #define BOX_X 80
+  #define BOX_H 82
+  #define BOX_W 225
+#endif
 
 #define __XSTR(__s) __STR(__s)
 #define __STR(__s) #__s
@@ -54,12 +62,14 @@ static pi_task_t task_himax;
 
 signed char OUT_CHAR[100];
 
-L2_MEM bbox_t *out_boxes;
+L2_MEM short int out_boxes[40];
+L2_MEM signed char out_scores[10];
+L2_MEM signed char out_classes[10];
 
 #define NUM_STRIPES     88
 #define NUM_CHARS_DICT  71
 #define BLANK_CHAR_IDX  NUM_CHARS_DICT - 1
-#define SCORE_THR       10000
+#define SCORE_THR       0
 static char *CHAR_DICT [71] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "<Anhui>", "<Beijing>", "<Chongqing>", "<Fujian>", "<Gansu>", "<Guangdong>", "<Guangxi>", "<Guizhou>", "<Hainan>", "<Hebei>", "<Heilongjiang>", "<Henan>", "<HongKong>", "<Hubei>", "<Hunan>", "<InnerMongolia>", "<Jiangsu>", "<Jiangxi>", "<Jilin>", "<Liaoning>", "<Macau>", "<Ningxia>", "<Qinghai>", "<Shaanxi>", "<Shandong>", "<Shanghai>", "<Shanxi>", "<Sichuan>", "<Tianjin>", "<Tibet>", "<Xinjiang>", "<Yunnan>", "<Zhejiang>", "<police>", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "_"};
 
 #ifdef HAVE_LCD
@@ -103,7 +113,7 @@ static void RunSSDNetwork()
   gap_cl_resethwtimer();
   int start = gap_cl_readhwtimer();
 #endif
-  __PREFIX1(CNN)((signed char *) l3_buff, (signed short *) out_boxes);
+  __PREFIX1(CNN)((signed char *) l3_buff, out_boxes, out_classes, out_scores);
 #ifdef PERF
   int end = gap_cl_readhwtimer();
   printf("SSD PERF: %d cycles\n", end - start);
@@ -242,7 +252,7 @@ while(1)
       PRINTF("Reading image\n");
       if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD, 1, Input_1, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char), IMGIO_OUTPUT_CHAR, 0)) {
         printf("Failed to load image %s\n", ImageName);
-        return 1;
+        pmsis_exit(-1);
       }
     #endif
     for(int i=0; i<AT_INPUT_HEIGHT_SSD*AT_INPUT_WIDTH_SSD; i++){
@@ -258,18 +268,12 @@ while(1)
     #endif
     PRINTF("Finished reading image\n");
 
-    //Allocate output buffers:
-    out_boxes = (bbox_t *) pmsis_l2_malloc(MAX_BB*sizeof(bbox_t));
-    if(out_boxes==NULL){
-      printf("Error Allocating CNN output buffers");
-      return 1;
-    }
     // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
     int ssd_constructor_err = __PREFIX1(CNN_Construct)();
     if (ssd_constructor_err)
     {
       printf("SSD Graph constructor exited with an error: %d\n", ssd_constructor_err);
-      return 1;
+      pmsis_exit(-1);
     }
     PRINTF("SSD Graph constructor was OK\n");
 
@@ -288,10 +292,8 @@ while(1)
     // Execute the function "RunNetwork" on the cluster.
     pi_cluster_send_task_to_cl(&cluster_dev, task);
 
-    bbox_t plate_bbox = out_boxes[0];
     __PREFIX1(CNN_Destruct)();
     pmsis_l2_malloc_free(task, sizeof(struct pi_cluster_task));
-    pmsis_l2_malloc_free(out_boxes, MAX_BB*sizeof(bbox_t));
 
     #ifdef HAVE_LCD
       uint8_t* lcd_buffer = (uint8_t*) pmsis_l2_malloc(AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
@@ -309,12 +311,15 @@ while(1)
       pmsis_l2_malloc_free(lcd_buffer, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
       draw_text(&ili, OUT_CHAR, 0, 0, 2);
     #endif
-    if(plate_bbox.alive && (plate_bbox.score > SCORE_THR)){
-     	int box_x = (int)(FIX2FP(plate_bbox.x,14)*320);
-      int box_y = (int)(FIX2FP(plate_bbox.y,14)*240);
-     	int box_w = (int)(FIX2FP(plate_bbox.w,14)*320);
-      int box_h = (int)(FIX2FP(plate_bbox.h,14)*240);
-      PRINTF("BBOX (x, y, w, h): (%d, %d, %d, %d) SCORE: %f\n", box_x, box_y, box_w, box_h, FIX2FP(plate_bbox.score,15));
+    if(out_scores[0] > SCORE_THR){
+      int box_y_min = (int)(FIX2FP(out_boxes[0]*ssdlite_ocr_Output_1_OUT_QSCALE,ssdlite_ocr_Output_1_OUT_QNORM)*240);
+     	int box_x_min = (int)(FIX2FP(out_boxes[1]*ssdlite_ocr_Output_1_OUT_QSCALE,ssdlite_ocr_Output_1_OUT_QNORM)*320);
+      int box_y_max = (int)(FIX2FP(out_boxes[2]*ssdlite_ocr_Output_1_OUT_QSCALE,ssdlite_ocr_Output_1_OUT_QNORM)*240);
+     	int box_x_max = (int)(FIX2FP(out_boxes[3]*ssdlite_ocr_Output_1_OUT_QSCALE,ssdlite_ocr_Output_1_OUT_QNORM)*320);
+      int box_h = box_y_max - box_y_min;
+      int box_w = box_x_max - box_x_min;
+      //PRINTF("BBOX (x, y, w, h): (%d, %d, %d, %d) SCORE: %f\n", out_boxes[0], out_boxes[1], out_boxes[2], out_boxes[3], FIX2FP(out_scores[0],7));
+      PRINTF("BBOX (x, y, w, h): (%d, %d, %d, %d) SCORE: %f\n", box_x_min, box_y_min, box_w, box_h, FIX2FP(out_scores[0],7));
       img_plate_resized      = (signed char *) pmsis_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
       signed char* img_plate = (signed char *) pmsis_l2_malloc(box_w*box_h*sizeof(char));
     	if(img_plate==NULL || img_plate_resized==NULL){
@@ -322,20 +327,20 @@ while(1)
     	  pmsis_exit(-1);
     	}
       #ifdef HAVE_LCD
-        writeFillRect(&ili, box_x, box_y, 2, box_h, 0x03E0);
-        writeFillRect(&ili, box_x, box_y, box_w, 2, 0x03E0);
-        writeFillRect(&ili, box_x, box_y+box_h, box_w, 2, 0x03E0);
-        writeFillRect(&ili, box_x+box_w, box_y, 2, box_h, 0x03E0);
+        writeFillRect(&ili, box_x_min, box_y_min, 2, box_h, 0x03E0);
+        writeFillRect(&ili, box_x_min, box_y_min, box_w, 2, 0x03E0);
+        writeFillRect(&ili, box_x_min, box_y_max, box_w, 2, 0x03E0);
+        writeFillRect(&ili, box_x_max, box_y_min, 2, box_h, 0x03E0);
       #endif
       #ifdef TEST
         //test for image: china_1
-        if (!(box_x>65 && box_x<80) || !(box_y>130 && box_y<145) || !(box_w>224 && box_w<244) || !(box_h>75 && box_h<90)){
-          printf("Error in bounding boxes for image china_1.ppm\n");
+        if (!(box_x_min>(BOX_X-10) && box_x_min<(BOX_X+10)) || !(box_y_min>(BOX_Y-10) && box_y_min<(BOX_Y+10)) || !(box_w>(BOX_W-10) && box_w<(BOX_W+10)) || !(box_h>(BOX_H-10) && box_h<(BOX_H+10))){
+          printf("Error in bounding boxes for image china_1.ppm (%d %d %d %d) instead of (%d %d %d %d)\n", box_x_min, box_y_min, box_w, box_h, BOX_X, BOX_Y, BOX_W, BOX_H);
           pmsis_exit(-1);
         }
       #endif
       pi_task_t end_copy;
-      pi_ram_copy_2d_async(&HyperRam, (uint32_t) (l3_buff+box_y*AT_INPUT_WIDTH_SSD+box_x), (img_plate), \
+      pi_ram_copy_2d_async(&HyperRam, (uint32_t) (l3_buff+box_y_min*AT_INPUT_WIDTH_SSD+box_x_min), (img_plate), \
                            (uint32_t) box_w*box_h, (uint32_t) AT_INPUT_WIDTH_SSD, (uint32_t) box_w, 1, pi_task_block(&end_copy));
       pi_task_wait_on(&end_copy);
 
@@ -445,6 +450,6 @@ pmsis_exit(0);
 int main(void)
 {
   PRINTF("\n\n\t *** OCR SSD ***\n\n");
-  pmsis_kickoff((void *) start);
-  return 0;
+  int ret = pmsis_kickoff((void *) start);
+  return ret;
 }
