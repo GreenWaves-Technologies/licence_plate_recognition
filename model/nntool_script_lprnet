@@ -9,13 +9,17 @@ nodeoption CONV_2D_0_8_fusion PARALLELFEATURES 0
 nodeoption CONV_2D_0_12_fusion PARALLELFEATURES 0
 
 set l2_ram_ext_managed false
-set graph_reorder_constant_in false
-#set graph_const_exec_from_flash true
+set graph_const_exec_from_flash true
 set graph_size_opt 2
 
-#set graph_produce_node_names true
-#set graph_produce_operinfos true
-#set graph_monitor_cycles true
+############## PERF COUNTER #################
+set graph_monitor_cvar_name LPR_Monitor
+set graph_produce_operinfos_cvar_name LPR_Op
+set graph_produce_node_cvar_name LPR_Nodes
+set graph_produce_node_names true
+set graph_produce_operinfos true
+set graph_monitor_cycles true
+
 
 #set graph_dump_tensor 7
 #set graph_trace_exec true

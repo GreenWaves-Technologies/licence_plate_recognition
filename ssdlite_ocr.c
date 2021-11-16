@@ -11,6 +11,8 @@
 
 #include "ssdlite_ocr.h"
 #include "ssdlite_ocrKernels.h"
+#include "ssdlite_ocrInfo.h"
+
 #ifndef __EMUL__
 #include "pmsis.h"
 #include "bsp/bsp.h"
@@ -37,6 +39,7 @@
 #define CAMERA_HEIGHT   (244)
 #define CAMERA_COLORS   (1)
 #define CAMERA_SIZE     (CAMERA_WIDTH*CAMERA_HEIGHT*CAMERA_COLORS)
+#define SCORE_THR       0
 
 AT_HYPERFLASH_FS_EXT_ADDR_TYPE __PREFIX(_L3_Flash) = 0;
 
@@ -51,7 +54,9 @@ AT_HYPERFLASH_FS_EXT_ADDR_TYPE __PREFIX(_L3_Flash) = 0;
   static uint32_t l3_buff;
 #endif
 
-L2_MEM bbox_t *out_boxes;
+L2_MEM short int out_boxes[40];
+L2_MEM signed char out_scores[10];
+L2_MEM signed char out_classes[10];
 
 #ifdef HAVE_LCD
 static int open_display(struct pi_device *device)
@@ -88,9 +93,9 @@ static void RunNetwork()
   gap_cl_resethwtimer();
 #endif
 #ifndef __EMUL__
-  __PREFIX(CNN)(l3_buff, out_boxes);
+  __PREFIX(CNN)(l3_buff, out_boxes, out_classes, out_scores);
 #else
-  __PREFIX(CNN)(Input_1, out_boxes);
+  __PREFIX(CNN)(Input_1, out_boxes, out_classes, out_scores);
 #endif
 }
 
@@ -227,13 +232,6 @@ int start()
   }
 #endif
 
-  //Allocate output buffers:
-  out_boxes  = (short int *)AT_L2_ALLOC(0, MAX_BB*sizeof(bbox_t));
-  if(out_boxes==NULL){
-    printf("Error Allocating CNN output buffers");
-    return 1;
-  }
-
   // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
   if (__PREFIX(CNN_Construct)())
   {
@@ -264,9 +262,9 @@ int start()
 	{
 		unsigned int TotalCycles = 0, TotalOper = 0;
 		printf("\n");
-		for (int i=0; i<(sizeof(AT_GraphPerf)/sizeof(unsigned int)); i++) {
-			printf("%45s: Cycles: %10d, Operations: %10d, Operations/Cycle: %f\n", AT_GraphNodeNames[i], AT_GraphPerf[i], AT_GraphOperInfosNames[i], ((float) AT_GraphOperInfosNames[i])/ AT_GraphPerf[i]);
-			TotalCycles += AT_GraphPerf[i]; TotalOper += AT_GraphOperInfosNames[i];
+		for (int i=0; i<(sizeof(SSD_Monitor)/sizeof(unsigned int)); i++) {
+			printf("%45s: Cycles: %10d, Operations: %10d, Operations/Cycle: %f\n", SSD_Nodes[i], SSD_Monitor[i], SSD_Op[i], ((float) SSD_Op[i])/ SSD_Monitor[i]);
+			TotalCycles += SSD_Monitor[i]; TotalOper += SSD_Op[i];
 		}
 		printf("\n");
 		printf("%45s: Cycles: %10d, Operations: %10d, Operations/Cycle: %f\n", "Total", TotalCycles, TotalOper, ((float) TotalOper)/ TotalCycles);
@@ -275,21 +273,26 @@ int start()
   #endif
 #endif
   __PREFIX(CNN_Destruct)();
-  if(out_boxes[0].alive){
-    #ifdef HAVE_LCD
-      writeFillRect(&ili, (int)(FIX2FP(out_boxes[0].x,14)*320), (int)(FIX2FP(out_boxes[0].y,14)*240), 2, (int)(FIX2FP(out_boxes[0].h,14)*240), 0xFFFF);
-      writeFillRect(&ili, (int)(FIX2FP(out_boxes[0].x,14)*320), (int)(FIX2FP(out_boxes[0].y,14)*240), (int)(FIX2FP(out_boxes[0].w,14)*320), 2, 0xFFFF);
-      writeFillRect(&ili, (int)(FIX2FP(out_boxes[0].x,14)*320), (int)(FIX2FP(out_boxes[0].h+out_boxes[0].y,14)*240), (int)(FIX2FP(out_boxes[0].w,14)*320), 2, 0xFFFF);
-      writeFillRect(&ili, (int)(FIX2FP(out_boxes[0].w+out_boxes[0].x,14)*320), (int)(FIX2FP(out_boxes[0].y,14)*240), 2, (int)(FIX2FP(out_boxes[0].h,14)*240), 0xFFFF);
-    #endif
-    PRINTF("draw.rectangle((%d,%d,%d,%d), outline=(255, 255, 0))\n",
-        (int)(FIX2FP(out_boxes[0].x,14)*320),
-        (int)(FIX2FP(out_boxes[0].y,14)*240),
-        (int)(FIX2FP(out_boxes[0].w+out_boxes[0].x,14)*320),
-        (int)(FIX2FP(out_boxes[0].h+out_boxes[0].y,14)*240)
+    if(out_scores[0] > SCORE_THR){
+      int box_y_min = (int)(FIX2FP(out_boxes[0]*ssdlite_ocr_Output_1_OUT_QSCALE,ssdlite_ocr_Output_1_OUT_QNORM)*240);
+      int box_x_min = (int)(FIX2FP(out_boxes[1]*ssdlite_ocr_Output_1_OUT_QSCALE,ssdlite_ocr_Output_1_OUT_QNORM)*320);
+      int box_y_max = (int)(FIX2FP(out_boxes[2]*ssdlite_ocr_Output_1_OUT_QSCALE,ssdlite_ocr_Output_1_OUT_QNORM)*240);
+      int box_x_max = (int)(FIX2FP(out_boxes[3]*ssdlite_ocr_Output_1_OUT_QSCALE,ssdlite_ocr_Output_1_OUT_QNORM)*320);
+      int box_h = box_y_max - box_y_min;
+      int box_w = box_x_max - box_x_min;
+      #ifdef HAVE_LCD
+        writeFillRect(&ili, box_x_min, box_y_min, 2, box_h, 0x03E0);
+        writeFillRect(&ili, box_x_min, box_y_min, box_w, 2, 0x03E0);
+        writeFillRect(&ili, box_x_min, box_y_max, box_w, 2, 0x03E0);
+        writeFillRect(&ili, box_x_max, box_y_min, 2, box_h, 0x03E0);
+      #endif
+      PRINTF("draw.rectangle((%d,%d,%d,%d), outline=(255, 255, 0))\n",
+        (int)(FIX2FP(box_x_min,14)*320),
+        (int)(FIX2FP(box_y_min,14)*240),
+        (int)(FIX2FP(box_x_max,14)*320),
+        (int)(FIX2FP(box_y_max,14)*240)
         );
   }
-  AT_L2_FREE(0, out_boxes, MAX_BB*sizeof(bbox_t));
   PRINTF("Ended\n");
 #ifndef __EMUL__
   #ifdef PERF

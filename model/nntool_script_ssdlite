@@ -27,12 +27,16 @@ set graph_size_opt 2
 set default_input_exec_location "AT_MEM_L3_HRAM"
 set default_input_home_location "AT_MEM_L3_HRAM"
 set l3_ram_ext_managed true
-set graph_reorder_constant_in false
+set graph_const_exec_from_flash true
+#set graph_reorder_constant_in false
 #set graph_const_exec_from_flash true
 
 ############## PERF COUNTER #################
-#set graph_produce_node_names true
-#set graph_produce_operinfos true
-#set graph_monitor_cycles true
+set graph_monitor_cvar_name SSD_Monitor
+set graph_produce_operinfos_cvar_name SSD_Op
+set graph_produce_node_cvar_name SSD_Nodes
+set graph_produce_node_names true
+set graph_produce_operinfos true
+set graph_monitor_cycles true
 
 save_state

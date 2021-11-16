@@ -158,21 +158,19 @@ int start()
 	RunNetwork();
 #endif
 
-#if 0
 #ifdef PERF
 	{
 		unsigned int TotalCycles = 0, TotalOper = 0;
 		printf("\n");
-		for (int i=0; i<(sizeof(AT_GraphPerf)/sizeof(unsigned int)); i++) {
-			printf("%45s: Cycles: %10d, Operations: %10d, Operations/Cycle: %f\n", AT_GraphNodeNames[i],
-			       AT_GraphPerf[i], AT_GraphOperInfosNames[i], ((float) AT_GraphOperInfosNames[i])/ AT_GraphPerf[i]);
-			TotalCycles += AT_GraphPerf[i]; TotalOper += AT_GraphOperInfosNames[i];
+		for (int i=0; i<(sizeof(LPR_Monitor)/sizeof(unsigned int)); i++) {
+			printf("%45s: Cycles: %10d, Operations: %10d, Operations/Cycle: %f\n", LPR_Nodes[i],
+			       LPR_Monitor[i], LPR_Op[i], ((float) LPR_Op[i])/ LPR_Monitor[i]);
+			TotalCycles += LPR_Monitor[i]; TotalOper += LPR_Op[i];
 		}
 		printf("\n");
 		printf("%45s: Cycles: %10d, Operations: %10d, Operations/Cycle: %f\n", "Total", TotalCycles, TotalOper, ((float) TotalOper)/ TotalCycles);
 		printf("\n");
 	}
-#endif
 #endif
 
 	__PREFIX(CNN_Destruct)();
