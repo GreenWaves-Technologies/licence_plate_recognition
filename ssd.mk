@@ -70,7 +70,7 @@ APP_SRCS += BUILD_MODEL_SSD/ssdlite_ocrKernels.c
 APP_CFLAGS += -IBUILD_MODEL_SSD
 
 ifeq ($(platform), gvsoc)
-	APP_CFLAGS += -DHAVE_LCD -DPERF
+	APP_CFLAGS += -DPERF
 else
 	ifeq ($(MEAS),1)
 		APP_CFLAGS += -DSILENT -DMEASUREMENTS
