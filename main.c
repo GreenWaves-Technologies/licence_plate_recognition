@@ -406,6 +406,11 @@ while(1)
         printf("Copy from L2 to L2 failed : %ld\n", errors); pmsis_exit(-5);
       }
       #endif
+      #ifdef SAVE_PLATE_IMAGE
+      for (int i=0; i<AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR; i++) img_plate_resized[i] -=128;
+      WriteImageToFile("../../../resized_cropped_plate.ppm", AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR, 1, img_plate_resized, GRAY_SCALE_IO);
+      for (int i=0; i<AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR; i++) img_plate_resized[i] +=128;
+      #endif
 
       // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
       int lpr_constructor_err = __PREFIX2(CNN_Construct)();

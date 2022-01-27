@@ -23,7 +23,7 @@ NNTOOL_SCRIPT=model/nntool_script_lprnet
 TRAINED_TFLITE_MODEL=model/$(MODEL_PREFIX_LPR).tflite
 MODEL_PREFIX=$(MODEL_PREFIX_LPR)
 MODEL_SUFFIX=_LPR
-IMAGE=$(CURDIR)/images/china_1_cropped.ppm
+IMAGE=$(CURDIR)/resized_cropped_plate.ppm
 MAIN=$(MODEL_PREFIX_LPR).c
 
 MODEL_QUANTIZED = 1

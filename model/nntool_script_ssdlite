@@ -32,6 +32,7 @@ set graph_const_exec_from_flash true
 #set graph_const_exec_from_flash true
 
 ############## PERF COUNTER #################
+#set graph_trace_exec true
 set graph_monitor_cvar_name SSD_Monitor
 set graph_produce_operinfos_cvar_name SSD_Op
 set graph_produce_node_cvar_name SSD_Nodes
