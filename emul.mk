@@ -33,6 +33,7 @@ endif
 MODEL_QUANTIZED = 1
 
 include common/model_decl.mk
+NNTOOL_EXTRA_FLAGS += --use_hard_sigmoid
 
 CC = gcc
 CFLAGS += -g -m32 -O0 -D__EMUL__ -DAT_MODEL_PREFIX=$(MODEL_PREFIX) $(MODEL_SIZE_CFLAGS)
