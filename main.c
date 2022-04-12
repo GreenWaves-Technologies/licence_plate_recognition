@@ -201,6 +201,8 @@ int start()
   struct pi_device cluster_dev;
   struct pi_cluster_conf conf;
   pi_cluster_conf_init(&conf);
+  conf.cc_stack_size = STACK_SIZE;
+  conf.scratch_size = SLAVE_STACK_SIZE * pi_cl_cluster_nb_pe_cores();
   pi_open_from_conf(&cluster_dev, (void *)&conf);
   pi_cluster_open(&cluster_dev);
 
@@ -284,11 +286,8 @@ while(1)
       pmsis_exit(-1);
     }
     PRINTF("Stack size is %d and %d\n",STACK_SIZE,SLAVE_STACK_SIZE );
-    memset(task, 0, sizeof(struct pi_cluster_task));
-    task->entry = &RunSSDNetwork;
-    task->stack_size = STACK_SIZE;
-    task->slave_stack_size = SLAVE_STACK_SIZE;
-    task->arg = NULL;
+    pi_cluster_task(task, (void (*)(void *))&RunSSDNetwork, NULL);
+    pi_cluster_task_stacks(task, pi_cl_l1_scratch_alloc(&cluster_dev, task, SLAVE_STACK_SIZE * pi_cl_cluster_nb_pe_cores()), SLAVE_STACK_SIZE);
     // Execute the function "RunNetwork" on the cluster.
     pi_cluster_send_task_to_cl(&cluster_dev, task);
 
@@ -351,10 +350,6 @@ while(1)
         pmsis_exit(-1);
       }
       PRINTF("Stack size is %d and %d\n",1024, 512 );
-      memset(task_resize, 0, sizeof(struct pi_cluster_task));
-      task_resize->entry = &Resize;
-      task_resize->stack_size = 1024;
-      task_resize->slave_stack_size = 512;
 
       KerResizeBilinear_ArgT ResizeArg;
         ResizeArg.In             = img_plate;
@@ -365,7 +360,8 @@ while(1)
         ResizeArg.Hout           = AT_INPUT_HEIGHT_LPR;
         ResizeArg.HTileOut       = AT_INPUT_HEIGHT_LPR;
         ResizeArg.FirstLineIndex = 0;
-      task_resize->arg = &ResizeArg;
+      pi_cluster_task(task_resize, (void (*)(void *))&Resize, &ResizeArg);
+      pi_cluster_task_stacks(task_resize, pi_cl_l1_scratch_alloc(&cluster_dev, task_resize, SLAVE_STACK_SIZE * pi_cl_cluster_nb_pe_cores()), SLAVE_STACK_SIZE);
       pi_cluster_send_task_to_cl(&cluster_dev, task_resize);
 
       pmsis_l2_malloc_free(task_resize, sizeof(struct pi_cluster_task));
@@ -432,11 +428,8 @@ while(1)
         pmsis_exit(-1);
       }
       PRINTF("Stack size is %d and %d\n",STACK_SIZE,SLAVE_STACK_SIZE );
-      memset(task_recogniction, 0, sizeof(struct pi_cluster_task));
-      task_recogniction->entry = &RunLPRNetwork;
-      task_recogniction->stack_size = STACK_SIZE;
-      task_recogniction->slave_stack_size = SLAVE_STACK_SIZE;
-      task_recogniction->arg = NULL;
+      pi_cluster_task(task_recogniction, (void (*)(void *))&RunLPRNetwork, NULL);
+      pi_cluster_task_stacks(task_recogniction, pi_cl_l1_scratch_alloc(&cluster_dev, task_recogniction, SLAVE_STACK_SIZE * pi_cl_cluster_nb_pe_cores()), SLAVE_STACK_SIZE);
 
       // Execute the function "RunNetwork" on the cluster.
       pi_cluster_send_task_to_cl(&cluster_dev, task_recogniction);
