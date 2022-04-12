@@ -287,7 +287,12 @@ while(1)
     }
     PRINTF("Stack size is %d and %d\n",STACK_SIZE,SLAVE_STACK_SIZE );
     pi_cluster_task(task, (void (*)(void *))&RunSSDNetwork, NULL);
+#ifdef __GAP8__
+      task->stack_size = STACK_SIZE;
+      task->slave_stack_size = SLAVE_STACK_SIZE;
+#else
     pi_cluster_task_stacks(task, pi_cl_l1_scratch_alloc(&cluster_dev, task, SLAVE_STACK_SIZE * pi_cl_cluster_nb_pe_cores()), SLAVE_STACK_SIZE);
+#endif
     // Execute the function "RunNetwork" on the cluster.
     pi_cluster_send_task_to_cl(&cluster_dev, task);
 
@@ -361,7 +366,12 @@ while(1)
         ResizeArg.HTileOut       = AT_INPUT_HEIGHT_LPR;
         ResizeArg.FirstLineIndex = 0;
       pi_cluster_task(task_resize, (void (*)(void *))&Resize, &ResizeArg);
+#ifdef __GAP8__
+      task_resize->stack_size = STACK_SIZE;
+      task_resize->slave_stack_size = SLAVE_STACK_SIZE;
+#else
       pi_cluster_task_stacks(task_resize, pi_cl_l1_scratch_alloc(&cluster_dev, task_resize, SLAVE_STACK_SIZE * pi_cl_cluster_nb_pe_cores()), SLAVE_STACK_SIZE);
+#endif
       pi_cluster_send_task_to_cl(&cluster_dev, task_resize);
 
       pmsis_l2_malloc_free(task_resize, sizeof(struct pi_cluster_task));
@@ -429,7 +439,12 @@ while(1)
       }
       PRINTF("Stack size is %d and %d\n",STACK_SIZE,SLAVE_STACK_SIZE );
       pi_cluster_task(task_recogniction, (void (*)(void *))&RunLPRNetwork, NULL);
+#ifdef __GAP8__
+      task_recogniction->stack_size = STACK_SIZE;
+      task_recogniction->slave_stack_size = SLAVE_STACK_SIZE;
+#else
       pi_cluster_task_stacks(task_recogniction, pi_cl_l1_scratch_alloc(&cluster_dev, task_recogniction, SLAVE_STACK_SIZE * pi_cl_cluster_nb_pe_cores()), SLAVE_STACK_SIZE);
+#endif
 
       // Execute the function "RunNetwork" on the cluster.
       pi_cluster_send_task_to_cl(&cluster_dev, task_recogniction);
