@@ -26,6 +26,12 @@
 
 #include "gaplib/ImgIO.h"
 
+#ifndef SILENT
+    #define PRINTF printf
+#else
+    #define PRINTF(...) ((void) 0)
+#endif
+
 #ifdef TEST
   #define BOX_Y 137
   #define BOX_X 80
