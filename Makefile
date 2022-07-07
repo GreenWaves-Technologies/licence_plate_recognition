@@ -48,7 +48,7 @@ else
 endif
 
 # FC stack size:
-MAIN_STACK_SIZE=4096
+MAIN_STACK_SIZE=5120
 # CL stack size:
 
 ifeq '$(TARGET_CHIP_FAMILY)' 'GAP9'

@@ -178,7 +178,7 @@ static void Resize(KerResizeBilinear_ArgT *KerArg)
     AT_FORK(gap_ncore(), (void *) KerResizeBilinear, (void *) KerArg);
 }
 
-int start()
+void start()
 {
 #ifdef HAVE_HIMAX
   int err = open_camera_himax(&camera);
