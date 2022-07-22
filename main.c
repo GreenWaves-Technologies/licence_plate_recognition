@@ -26,6 +26,12 @@
 
 #include "gaplib/ImgIO.h"
 
+#ifndef SILENT
+    #define PRINTF printf
+#else
+    #define PRINTF(...) ((void) 0)
+#endif
+
 #ifdef TEST
   #define BOX_Y 137
   #define BOX_X 80
@@ -172,7 +178,7 @@ static void Resize(KerResizeBilinear_ArgT *KerArg)
     AT_FORK(gap_ncore(), (void *) KerResizeBilinear, (void *) KerArg);
 }
 
-int start()
+void start()
 {
 #ifdef HAVE_HIMAX
   int err = open_camera_himax(&camera);
@@ -201,6 +207,8 @@ int start()
   struct pi_device cluster_dev;
   struct pi_cluster_conf conf;
   pi_cluster_conf_init(&conf);
+  conf.cc_stack_size = STACK_SIZE;
+  conf.scratch_size = SLAVE_STACK_SIZE * pi_cl_cluster_nb_pe_cores();
   pi_open_from_conf(&cluster_dev, (void *)&conf);
   pi_cluster_open(&cluster_dev);
 
@@ -284,11 +292,13 @@ while(1)
       pmsis_exit(-1);
     }
     PRINTF("Stack size is %d and %d\n",STACK_SIZE,SLAVE_STACK_SIZE );
-    memset(task, 0, sizeof(struct pi_cluster_task));
-    task->entry = &RunSSDNetwork;
-    task->stack_size = STACK_SIZE;
-    task->slave_stack_size = SLAVE_STACK_SIZE;
-    task->arg = NULL;
+    pi_cluster_task(task, (void (*)(void *))&RunSSDNetwork, NULL);
+#ifdef __GAP8__
+      task->stack_size = STACK_SIZE;
+      task->slave_stack_size = SLAVE_STACK_SIZE;
+#else
+    pi_cluster_task_stacks(task, pi_cl_l1_scratch_alloc(&cluster_dev, task, SLAVE_STACK_SIZE * pi_cl_cluster_nb_pe_cores()), SLAVE_STACK_SIZE);
+#endif
     // Execute the function "RunNetwork" on the cluster.
     pi_cluster_send_task_to_cl(&cluster_dev, task);
 
@@ -319,7 +329,7 @@ while(1)
       int box_h = box_y_max - box_y_min;
       int box_w = box_x_max - box_x_min;
       //PRINTF("BBOX (x, y, w, h): (%d, %d, %d, %d) SCORE: %f\n", out_boxes[0], out_boxes[1], out_boxes[2], out_boxes[3], FIX2FP(out_scores[0],7));
-      PRINTF("BBOX (x, y, w, h): (%d, %d, %d, %d) SCORE: %f\n", box_x_min, box_y_min, box_w, box_h, FIX2FP(out_scores[0],7));
+      printf("BBOX (x, y, w, h): (%d, %d, %d, %d) SCORE: %f\n", box_x_min, box_y_min, box_w, box_h, FIX2FP(out_scores[0],7));
       img_plate_resized      = (signed char *) pmsis_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
       signed char* img_plate = (signed char *) pmsis_l2_malloc(box_w*box_h*sizeof(char));
     	if(img_plate==NULL || img_plate_resized==NULL){
@@ -351,10 +361,6 @@ while(1)
         pmsis_exit(-1);
       }
       PRINTF("Stack size is %d and %d\n",1024, 512 );
-      memset(task_resize, 0, sizeof(struct pi_cluster_task));
-      task_resize->entry = &Resize;
-      task_resize->stack_size = 1024;
-      task_resize->slave_stack_size = 512;
 
       KerResizeBilinear_ArgT ResizeArg;
         ResizeArg.In             = img_plate;
@@ -365,7 +371,13 @@ while(1)
         ResizeArg.Hout           = AT_INPUT_HEIGHT_LPR;
         ResizeArg.HTileOut       = AT_INPUT_HEIGHT_LPR;
         ResizeArg.FirstLineIndex = 0;
-      task_resize->arg = &ResizeArg;
+      pi_cluster_task(task_resize, (void (*)(void *))&Resize, &ResizeArg);
+#ifdef __GAP8__
+      task_resize->stack_size = STACK_SIZE;
+      task_resize->slave_stack_size = SLAVE_STACK_SIZE;
+#else
+      pi_cluster_task_stacks(task_resize, pi_cl_l1_scratch_alloc(&cluster_dev, task_resize, SLAVE_STACK_SIZE * pi_cl_cluster_nb_pe_cores()), SLAVE_STACK_SIZE);
+#endif
       pi_cluster_send_task_to_cl(&cluster_dev, task_resize);
 
       pmsis_l2_malloc_free(task_resize, sizeof(struct pi_cluster_task));
@@ -406,6 +418,11 @@ while(1)
         printf("Copy from L2 to L2 failed : %ld\n", errors); pmsis_exit(-5);
       }
       #endif
+      #ifdef SAVE_PLATE_IMAGE
+      for (int i=0; i<AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR; i++) img_plate_resized[i] -=128;
+      WriteImageToFile("../../../resized_cropped_plate.ppm", AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR, 1, img_plate_resized, GRAY_SCALE_IO);
+      for (int i=0; i<AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR; i++) img_plate_resized[i] +=128;
+      #endif
 
       // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
       int lpr_constructor_err = __PREFIX2(CNN_Construct)();
@@ -427,11 +444,13 @@ while(1)
         pmsis_exit(-1);
       }
       PRINTF("Stack size is %d and %d\n",STACK_SIZE,SLAVE_STACK_SIZE );
-      memset(task_recogniction, 0, sizeof(struct pi_cluster_task));
-      task_recogniction->entry = &RunLPRNetwork;
+      pi_cluster_task(task_recogniction, (void (*)(void *))&RunLPRNetwork, NULL);
+#ifdef __GAP8__
       task_recogniction->stack_size = STACK_SIZE;
       task_recogniction->slave_stack_size = SLAVE_STACK_SIZE;
-      task_recogniction->arg = NULL;
+#else
+      pi_cluster_task_stacks(task_recogniction, pi_cl_l1_scratch_alloc(&cluster_dev, task_recogniction, SLAVE_STACK_SIZE * pi_cl_cluster_nb_pe_cores()), SLAVE_STACK_SIZE);
+#endif
 
       // Execute the function "RunNetwork" on the cluster.
       pi_cluster_send_task_to_cl(&cluster_dev, task_recogniction);
