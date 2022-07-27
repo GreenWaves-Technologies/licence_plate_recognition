@@ -82,7 +82,7 @@ int start()
 
 	char *ImageName = __XSTR(AT_IMAGE);
 	//Reading Image from Bridge
-	uint8_t* Input_1 = (uint8_t*) pmsis_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
+	uint8_t* Input_1 = (uint8_t*) pi_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
 	if(Input_1==NULL){
 		PRINTF("Error allocating image buffer\n");
 		pmsis_exit(-1);
@@ -130,7 +130,7 @@ int start()
 
 #ifndef __EMUL__
 	/*--------------------------TASK SETUP------------------------------*/
-	struct pi_cluster_task *task = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
+	struct pi_cluster_task *task = pi_l2_malloc(sizeof(struct pi_cluster_task));
 	if(task==NULL) {
 		printf("pi_cluster_task alloc Error!\n");
 		pmsis_exit(-1);

@@ -226,7 +226,7 @@ while(1)
   {
   //------------------------- Aquisition + INFERENCE
     #ifdef HAVE_HIMAX
-      uint8_t* Input_1 = (uint8_t*) pmsis_l2_malloc(CAMERA_SIZE*sizeof(char));
+      uint8_t* Input_1 = (uint8_t*) pi_l2_malloc(CAMERA_SIZE*sizeof(char));
       //Reading Image from Bridge
       if(Input_1==NULL){
         printf("Error allocating image buffer\n");
@@ -249,7 +249,7 @@ while(1)
         }
       #endif
     #else
-      uint8_t* Input_1 = (uint8_t*) pmsis_l2_malloc(AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
+      uint8_t* Input_1 = (uint8_t*) pi_l2_malloc(AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
       char *ImageName = __XSTR(AT_IMAGE);
       //Reading Image from Bridge
       if(Input_1==NULL){
@@ -270,9 +270,9 @@ while(1)
     pi_ram_write(&HyperRam, l3_buff+AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD  , Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
     pi_ram_write(&HyperRam, l3_buff+2*AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD, Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
     #ifdef HAVE_HIMAX
-      pmsis_l2_malloc_free(Input_1, CAMERA_SIZE*sizeof(char));
+      pi_l2_free(Input_1, CAMERA_SIZE*sizeof(char));
     #else
-      pmsis_l2_malloc_free(Input_1, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
+      pi_l2_free(Input_1, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
     #endif
     PRINTF("Finished reading image\n");
 
@@ -286,7 +286,7 @@ while(1)
     PRINTF("SSD Graph constructor was OK\n");
 
     /*--------------------------TASK SETUP------------------------------*/
-    struct pi_cluster_task *task = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
+    struct pi_cluster_task *task = pi_l2_malloc(sizeof(struct pi_cluster_task));
     if(task==NULL) {
       printf("pi_cluster_task alloc Error!\n");
       pmsis_exit(-1);
@@ -303,10 +303,10 @@ while(1)
     pi_cluster_send_task_to_cl(&cluster_dev, task);
 
     __PREFIX1(CNN_Destruct)();
-    pmsis_l2_malloc_free(task, sizeof(struct pi_cluster_task));
+    pi_l2_free(task, sizeof(struct pi_cluster_task));
 
     #ifdef HAVE_LCD
-      uint8_t* lcd_buffer = (uint8_t*) pmsis_l2_malloc(AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
+      uint8_t* lcd_buffer = (uint8_t*) pi_l2_malloc(AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
       pi_ram_read(&HyperRam, l3_buff, lcd_buffer, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
       for(int i=0; i<AT_INPUT_HEIGHT_SSD*AT_INPUT_WIDTH_SSD; i++){
         lcd_buffer[i] += 128;
@@ -318,7 +318,7 @@ while(1)
       pi_buffer_set_stride(&buffer, 0);
       pi_buffer_set_format(&buffer, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD, 1, PI_BUFFER_FORMAT_GRAY);
       pi_display_write(&ili, &buffer, 0, 0, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD);
-      pmsis_l2_malloc_free(lcd_buffer, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
+      pi_l2_free(lcd_buffer, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
       draw_text(&ili, OUT_CHAR, 0, 0, 2);
     #endif
     if(out_scores[0] > SCORE_THR){
@@ -330,8 +330,8 @@ while(1)
       int box_w = box_x_max - box_x_min;
       //PRINTF("BBOX (x, y, w, h): (%d, %d, %d, %d) SCORE: %f\n", out_boxes[0], out_boxes[1], out_boxes[2], out_boxes[3], FIX2FP(out_scores[0],7));
       printf("BBOX (x, y, w, h): (%d, %d, %d, %d) SCORE: %f\n", box_x_min, box_y_min, box_w, box_h, FIX2FP(out_scores[0],7));
-      img_plate_resized      = (signed char *) pmsis_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
-      signed char* img_plate = (signed char *) pmsis_l2_malloc(box_w*box_h*sizeof(char));
+      img_plate_resized      = (signed char *) pi_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
+      signed char* img_plate = (signed char *) pi_l2_malloc(box_w*box_h*sizeof(char));
     	if(img_plate==NULL || img_plate_resized==NULL){
     	  printf("Error allocating image plate buffers\n");
     	  pmsis_exit(-1);
@@ -355,7 +355,7 @@ while(1)
       pi_task_wait_on(&end_copy);
 
       /*--------------------------TASK SETUP------------------------------*/
-      struct pi_cluster_task *task_resize = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
+      struct pi_cluster_task *task_resize = pi_l2_malloc(sizeof(struct pi_cluster_task));
       if(task_resize==NULL) {
         printf("pi_cluster_task alloc Error!\n");
         pmsis_exit(-1);
@@ -380,8 +380,8 @@ while(1)
 #endif
       pi_cluster_send_task_to_cl(&cluster_dev, task_resize);
 
-      pmsis_l2_malloc_free(task_resize, sizeof(struct pi_cluster_task));
-      pmsis_l2_malloc_free(img_plate, box_w*box_h*sizeof(char));
+      pi_l2_free(task_resize, sizeof(struct pi_cluster_task));
+      pi_l2_free(img_plate, box_w*box_h*sizeof(char));
 
       #ifdef DUMP_RESIZED
         printf("\n\n(%d, %d)\n", box_w, box_h);
@@ -432,13 +432,13 @@ while(1)
         continue;
       }
       PRINTF("LPR Graph constructor was OK\n");
-      out_lpr = (char *) pmsis_l2_malloc(NUM_CHARS_DICT*NUM_STRIPES*sizeof(char));
+      out_lpr = (char *) pi_l2_malloc(NUM_CHARS_DICT*NUM_STRIPES*sizeof(char));
       if(out_lpr==NULL){
         printf("out_lpr alloc Error!\n");
         pmsis_exit(-1);
       }
       /*--------------------------TASK SETUP------------------------------*/
-      struct pi_cluster_task *task_recogniction = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
+      struct pi_cluster_task *task_recogniction = pi_l2_malloc(sizeof(struct pi_cluster_task));
       if(task_recogniction==NULL) {
         printf("pi_cluster_task alloc Error!\n");
         pmsis_exit(-1);
@@ -455,9 +455,9 @@ while(1)
       // Execute the function "RunNetwork" on the cluster.
       pi_cluster_send_task_to_cl(&cluster_dev, task_recogniction);
       __PREFIX2(CNN_Destruct)();
-      pmsis_l2_malloc_free(task_recogniction, sizeof(struct pi_cluster_task));
-      pmsis_l2_malloc_free(out_lpr, NUM_CHARS_DICT*NUM_STRIPES*sizeof(char));
-      pmsis_l2_malloc_free(img_plate_resized, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
+      pi_l2_free(task_recogniction, sizeof(struct pi_cluster_task));
+      pi_l2_free(out_lpr, NUM_CHARS_DICT*NUM_STRIPES*sizeof(char));
+      pi_l2_free(img_plate_resized, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
       #if defined (ONE_ITER) || defined (TEST)
         break;
       #endif
