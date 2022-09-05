@@ -93,8 +93,8 @@ BUILD_MODEL_SSD/ssdlite_ocrKernels.c:
 BUILD_MODEL_LPR/lprnetKernels.c: 
 	make -f lprnet.mk model CLUSTER_STACK_SIZE=$(CLUSTER_STACK_SIZE) CLUSTER_SLAVE_STACK_SIZE=$(CLUSTER_SLAVE_STACK_SIZE)
 
-# all depends on the models
-all:: BUILD_MODEL_SSD/ssdlite_ocrKernels.c BUILD_MODEL_LPR/lprnetKernels.c
+# build depends on the models
+build:: BUILD_MODEL_SSD/ssdlite_ocrKernels.c BUILD_MODEL_LPR/lprnetKernels.c
 
 clean::
 	rm -rf BUILD
