@@ -57,12 +57,6 @@ else
 	MODEL_L2_MEMORY=250000
 	MODEL_L3_MEMORY=8388608
 endif
-# hram - HyperBus RAM
-# qspiram - Quad SPI RAM
-MODEL_L3_EXEC=hram
-# hflash - HyperBus Flash
-# qpsiflash - Quad SPI Flash
-MODEL_L3_CONST=hflash
 
 APP = OCRssd
 APP_SRCS += $(MAIN) $(MODEL_COMMON_SRCS) $(CNN_LIB)

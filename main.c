@@ -18,7 +18,6 @@
 #include "pmsis.h"
 #include "bsp/bsp.h"
 #include "bsp/ram.h"
-#include "bsp/ram/hyperram.h"
 #include "bsp/buffer.h"
 #include "bsp/display/ili9341.h"
 #include "bsp/camera.h"
@@ -57,7 +56,7 @@ AT_HYPERFLASH_FS_EXT_ADDR_TYPE __PREFIX2(_L3_Flash) = 0;
 static struct pi_device dmacpy;
 #endif
 struct pi_device camera;
-struct pi_device HyperRam;
+struct pi_device DefaultRam;
 struct pi_device ili;
 static uint32_t l3_buff;
 signed char * img_plate_resized;
@@ -66,7 +65,7 @@ static pi_buffer_t buffer;
 static pi_buffer_t buffer_plate;
 static pi_task_t task_himax;
 
-signed char OUT_CHAR[100];
+char OUT_CHAR[100];
 
 L2_MEM short int out_boxes[40];
 L2_MEM signed char out_scores[10];
@@ -188,16 +187,16 @@ void start()
   }
 #endif
   /* Init & open ram. */
-  struct pi_hyperram_conf hyper_conf;
-  pi_hyperram_conf_init(&hyper_conf);
-  pi_open_from_conf(&HyperRam, &hyper_conf);
-  if (pi_ram_open(&HyperRam))
+  struct pi_default_ram_conf hyper_conf;
+  pi_default_ram_conf_init(&hyper_conf);
+  pi_open_from_conf(&DefaultRam, &hyper_conf);
+  if (pi_ram_open(&DefaultRam))
   {
     printf("Error ram open !\n");
     pmsis_exit(-3);
   }
 
-  if (pi_ram_alloc(&HyperRam, &l3_buff, (uint32_t) AT_INPUT_SIZE))
+  if (pi_ram_alloc(&DefaultRam, &l3_buff, (uint32_t) AT_INPUT_SIZE))
   {
     printf("Ram malloc failed !\n");
     pmsis_exit(-4);
@@ -266,9 +265,9 @@ while(1)
     for(int i=0; i<AT_INPUT_HEIGHT_SSD*AT_INPUT_WIDTH_SSD; i++){
       Input_1[i] -= 128;
     }
-    pi_ram_write(&HyperRam, l3_buff                                         , Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
-    pi_ram_write(&HyperRam, l3_buff+AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD  , Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
-    pi_ram_write(&HyperRam, l3_buff+2*AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD, Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
+    pi_ram_write(&DefaultRam, l3_buff                                         , Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
+    pi_ram_write(&DefaultRam, l3_buff+AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD  , Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
+    pi_ram_write(&DefaultRam, l3_buff+2*AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD, Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
     #ifdef HAVE_HIMAX
       pi_l2_free(Input_1, CAMERA_SIZE*sizeof(char));
     #else
@@ -307,7 +306,7 @@ while(1)
 
     #ifdef HAVE_LCD
       uint8_t* lcd_buffer = (uint8_t*) pi_l2_malloc(AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
-      pi_ram_read(&HyperRam, l3_buff, lcd_buffer, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
+      pi_ram_read(&DefaultRam, l3_buff, lcd_buffer, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
       for(int i=0; i<AT_INPUT_HEIGHT_SSD*AT_INPUT_WIDTH_SSD; i++){
         lcd_buffer[i] += 128;
       }
@@ -350,7 +349,7 @@ while(1)
         }
       #endif
       pi_task_t end_copy;
-      pi_ram_copy_2d_async(&HyperRam, (uint32_t) (l3_buff+box_y_min*AT_INPUT_WIDTH_SSD+box_x_min), (img_plate), \
+      pi_ram_copy_2d_async(&DefaultRam, (uint32_t) (l3_buff+box_y_min*AT_INPUT_WIDTH_SSD+box_x_min), (img_plate), \
                            (uint32_t) box_w*box_h, (uint32_t) AT_INPUT_WIDTH_SSD, (uint32_t) box_w, 1, pi_task_block(&end_copy));
       pi_task_wait_on(&end_copy);
 
