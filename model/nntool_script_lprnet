@@ -20,6 +20,9 @@ set graph_produce_node_names true
 set graph_produce_operinfos true
 set graph_monitor_cycles true
 
+# RAM/FLASH Settings
+set l3_ram_device $(MODEL_L3_RAM)
+set l3_flash_device $(MODEL_L3_FLASH)
 
 #set graph_dump_tensor 6
 #set graph_checksum 1

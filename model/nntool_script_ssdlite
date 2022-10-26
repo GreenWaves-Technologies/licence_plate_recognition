@@ -18,14 +18,18 @@ nodeoption CONV_2D_0_34 PARALLELFEATURES 0
 nodeoption CONV_2D_0_43_fusion PARALLELFEATURES 0
 nodeoption CONV_2D_0_45 PARALLELFEATURES 0
 
-nodeoption CONV_2D_0_47_fusion OUT_HOME_MEM_LOC AT_MEM_L3_HRAM
-nodeoption CONV_2D_0_47_fusion OUT_EXEC_MEM_LOC AT_MEM_L3_HRAM
+nodeoption CONV_2D_0_47_fusion OUT_HOME_MEM_LOC $(MODEL_L3_RAM)
+nodeoption CONV_2D_0_47_fusion OUT_EXEC_MEM_LOC $(MODEL_L3_RAM)
 set graph_size_opt 2
 #set graph_checksum 1
 
 ##############################################
-set default_input_exec_location "AT_MEM_L3_HRAM"
-set default_input_home_location "AT_MEM_L3_HRAM"
+# RAM/FLASH Settings
+set l3_ram_device $(MODEL_L3_RAM)
+set l3_flash_device $(MODEL_L3_FLASH)
+
+set default_input_exec_location $(MODEL_L3_RAM)
+set default_input_home_location $(MODEL_L3_RAM)
 set l3_ram_ext_managed true
 set graph_const_exec_from_flash true
 #set graph_reorder_constant_in false

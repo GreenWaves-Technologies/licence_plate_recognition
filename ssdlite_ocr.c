@@ -147,7 +147,7 @@ int start()
   #endif
   while(1){
     #ifdef HAVE_HIMAX
-      uint8_t* Input_1 = (uint8_t*) pmsis_l2_malloc(CAMERA_SIZE*sizeof(char));
+      uint8_t* Input_1 = (uint8_t*) pi_l2_malloc(CAMERA_SIZE*sizeof(char));
       //Reading Image from Bridge
       if(Input_1==NULL){
         printf("Error allocating image buffer\n");
@@ -158,7 +158,7 @@ int start()
       pi_camera_capture(&camera, Input_1, CAMERA_SIZE);
       pi_camera_control(&camera, PI_CAMERA_CMD_STOP, 0);
     #else
-      uint8_t* Input_1 = (uint8_t*) pmsis_l2_malloc(AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
+      uint8_t* Input_1 = (uint8_t*) pi_l2_malloc(AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
       char *ImageName = __XSTR(AT_IMAGE);
       //Reading Image from Bridge
       if(Input_1==NULL){
@@ -200,14 +200,14 @@ int start()
     pi_ram_write(&HyperRam, l3_buff+AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD  , Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
     pi_ram_write(&HyperRam, l3_buff+2*AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD, Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
     #ifdef HAVE_HIMAX
-      pmsis_l2_malloc_free(Input_1, CAMERA_SIZE*sizeof(char));
+      pi_l2_free(Input_1, CAMERA_SIZE*sizeof(char));
     #else
-      pmsis_l2_malloc_free(Input_1, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
+      pi_l2_free(Input_1, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
     #endif
   PRINTF("Finished reading image\n");
 
 /*--------------------------TASK SETUP------------------------------*/
-  struct pi_cluster_task *task = pmsis_l2_malloc(sizeof(struct pi_cluster_task));
+  struct pi_cluster_task *task = pi_l2_malloc(sizeof(struct pi_cluster_task));
   if(task==NULL) {
     printf("pi_cluster_task alloc Error!\n");
     pmsis_exit(-1);
