@@ -63,7 +63,7 @@ signed char * img_plate_resized;
 signed char * out_lpr;
 static pi_buffer_t buffer;
 static pi_buffer_t buffer_plate;
-static pi_task_t task_himax;
+static pi_event_t event_himax;
 
 char OUT_CHAR[100];
 
@@ -348,10 +348,11 @@ while(1)
           pmsis_exit(-1);
         }
       #endif
-      pi_task_t end_copy;
+
+      pi_event_t end_copy;
       pi_ram_copy_2d_async(&DefaultRam, (uint32_t) (l3_buff+box_y_min*AT_INPUT_WIDTH_SSD+box_x_min), (img_plate), \
-                           (uint32_t) box_w*box_h, (uint32_t) AT_INPUT_WIDTH_SSD, (uint32_t) box_w, 1, pi_task_block(&end_copy));
-      pi_task_wait_on(&end_copy);
+                           (uint32_t) box_w*box_h, (uint32_t) AT_INPUT_WIDTH_SSD, (uint32_t) box_w, 1, pi_evt_sig_init(&end_copy));
+      pi_evt_wait_on(&end_copy);
 
       /*--------------------------TASK SETUP------------------------------*/
       struct pi_cluster_task *task_resize = pi_l2_malloc(sizeof(struct pi_cluster_task));
