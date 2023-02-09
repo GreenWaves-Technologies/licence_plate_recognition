@@ -171,7 +171,7 @@ static void RunLPRNetwork()
   #endif
 }
 
-static void Resize(KerResizeBilinear_ArgT *KerArg)
+static void Resize(KerResize_ArgT *KerArg)
 {
     PRINTF("Resizing...\n");
     AT_FORK(gap_ncore(), (void *) KerResizeBilinear, (void *) KerArg);
@@ -352,7 +352,7 @@ while(1)
       pi_event_t end_copy;
       pi_ram_copy_2d_async(&DefaultRam, (uint32_t) (l3_buff+box_y_min*AT_INPUT_WIDTH_SSD+box_x_min), (img_plate), \
                            (uint32_t) box_w*box_h, (uint32_t) AT_INPUT_WIDTH_SSD, (uint32_t) box_w, 1, pi_evt_sig_init(&end_copy));
-      pi_evt_wait_on(&end_copy);
+      pi_evt_wait(&end_copy);
 
       /*--------------------------TASK SETUP------------------------------*/
       struct pi_cluster_task *task_resize = pi_l2_malloc(sizeof(struct pi_cluster_task));
@@ -362,15 +362,18 @@ while(1)
       }
       PRINTF("Stack size is %d and %d\n",1024, 512 );
 
-      KerResizeBilinear_ArgT ResizeArg;
+      KerResize_ArgT ResizeArg;
         ResizeArg.In             = img_plate;
         ResizeArg.Win            = box_w;
-        ResizeArg.Hin            = box_h;
+        ResizeArg.HTileIn        = box_h;
         ResizeArg.Out            = img_plate_resized;
         ResizeArg.Wout           = AT_INPUT_WIDTH_LPR;
-        ResizeArg.Hout           = AT_INPUT_HEIGHT_LPR;
         ResizeArg.HTileOut       = AT_INPUT_HEIGHT_LPR;
-        ResizeArg.FirstLineIndex = 0;
+        ResizeArg.WStep          = ((box_w-1)<<16)/(AT_INPUT_WIDTH_LPR-1);
+        ResizeArg.HStep          = ((box_h-1)<<16)/(AT_INPUT_HEIGHT_LPR-1);
+        ResizeArg.HTileInIndex   = 0;
+        ResizeArg.HTileOutIndex  = 0;
+        ResizeArg.Channels       = 1;
       pi_cluster_task(task_resize, (void (*)(void *))&Resize, &ResizeArg);
 #ifdef __GAP8__
       task_resize->stack_size = STACK_SIZE;
@@ -425,6 +428,7 @@ while(1)
       #endif
 
       // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
+      PRINTF("LPR Graph constructor ...\n");
       int lpr_constructor_err = __PREFIX2(CNN_Construct)();
       if (lpr_constructor_err)
       {
@@ -432,7 +436,7 @@ while(1)
         continue;
       }
       PRINTF("LPR Graph constructor was OK\n");
-      out_lpr = (char *) pi_l2_malloc(NUM_CHARS_DICT*NUM_STRIPES*sizeof(char));
+      out_lpr = (signed char *) pi_l2_malloc(NUM_CHARS_DICT*NUM_STRIPES*sizeof(char));
       if(out_lpr==NULL){
         printf("out_lpr alloc Error!\n");
         pmsis_exit(-1);
@@ -469,6 +473,5 @@ pmsis_exit(0);
 int main(void)
 {
   PRINTF("\n\n\t *** OCR SSD ***\n\n");
-  int ret = pmsis_kickoff((void *) start);
-  return ret;
+  start();
 }
