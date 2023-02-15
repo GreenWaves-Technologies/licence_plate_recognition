@@ -17,18 +17,11 @@
 #include "pmsis.h"
 #include "bsp/bsp.h"
 #include "bsp/ram.h"
-#include "bsp/ram/hyperram.h"
 #endif
 #include "gaplib/ImgIO.h"
 
 #define __XSTR(__s) __STR(__s)
 #define __STR(__s) #__s
-
-#ifdef SILENT
-  #define PRINTF(...) ((void) 0)
-#else
-  #define PRINTF printf
-#endif
 
 #define FIX2FP(Val, Precision)    ((float) (Val) / (float) (1<<(Precision)))
 
@@ -48,9 +41,8 @@ AT_HYPERFLASH_FS_EXT_ADDR_TYPE __PREFIX(_L3_Flash) = 0;
   uint8_t Input_1[AT_INPUT_SIZE];
 #else
   struct pi_device camera;
-  struct pi_device HyperRam;
+  struct pi_device DefaultRam;
   struct pi_device ili;
-  static pi_buffer_t buffer;
   static uint32_t l3_buff;
 #endif
 
@@ -86,7 +78,7 @@ static int open_camera_himax(struct pi_device *device)
 
 static void RunNetwork()
 {
-  PRINTF("Running on cluster\n");
+  printf("Running on cluster\n");
 #ifdef PERF
   printf("Start timer\n");
   gap_cl_starttimer();
@@ -101,7 +93,6 @@ static void RunNetwork()
 
 int start()
 {
-#ifndef __EMUL__
   #ifdef MEASUREMENTS
   pi_gpio_pin_configure(NULL, PI_GPIO_A0_PAD_8_A4, PI_GPIO_OUTPUT);
   pi_gpio_pin_write(NULL, PI_GPIO_A0_PAD_8_A4, 0);
@@ -114,30 +105,36 @@ int start()
     }
   #endif
   /* Init & open ram. */
-  struct pi_hyperram_conf hyper_conf;
-  pi_hyperram_conf_init(&hyper_conf);
-  pi_open_from_conf(&HyperRam, &hyper_conf);
-  if (pi_ram_open(&HyperRam))
+  struct pi_default_ram_conf hyper_conf;
+  pi_default_ram_conf_init(&hyper_conf);
+  pi_open_from_conf(&DefaultRam, &hyper_conf);
+  if (pi_ram_open(&DefaultRam))
   {
     printf("Error ram open !\n");
     pmsis_exit(-3);
   }
 
-  if (pi_ram_alloc(&HyperRam, &l3_buff, (uint32_t) AT_INPUT_SIZE))
+  if (pi_ram_alloc(&DefaultRam, &l3_buff, (uint32_t) AT_INPUT_SIZE))
   {
     printf("Ram malloc failed !\n");
     pmsis_exit(-4);
   }
 
-  pi_freq_set(PI_FREQ_DOMAIN_CL, FREQ_CL*1000*1000);
-  pi_freq_set(PI_FREQ_DOMAIN_FC, FREQ_FC*1000*1000);
 
 /*-----------------------OPEN THE CLUSTER--------------------------*/
   struct pi_device cluster_dev;
-  struct pi_cluster_conf conf;
-  pi_cluster_conf_init(&conf);
-  pi_open_from_conf(&cluster_dev, (void *)&conf);
-  pi_cluster_open(&cluster_dev);
+  struct pi_cluster_conf cl_conf;
+  pi_cluster_conf_init(&cl_conf);
+  cl_conf.id = 0;
+  cl_conf.cc_stack_size = STACK_SIZE;
+  pi_open_from_conf(&cluster_dev, (void *) &cl_conf);
+  if (pi_cluster_open(&cluster_dev))
+  {
+      printf("Cluster open failed !\n");
+      pmsis_exit(-4);
+  }
+  pi_freq_set(PI_FREQ_DOMAIN_CL, FREQ_CL*1000*1000);
+  pi_freq_set(PI_FREQ_DOMAIN_FC, FREQ_FC*1000*1000);
 
   #ifdef HAVE_LCD
     if (open_display(&ili)){
@@ -166,7 +163,7 @@ int start()
         pmsis_exit(-1);
       }
     /* -------------------- Read Image from bridge ---------------------*/
-      PRINTF("Reading image\n");
+      printf("Reading image\n");
       if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD, 1, Input_1, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char), IMGIO_OUTPUT_CHAR, 0)) {
         printf("Failed to load image %s\n", ImageName);
         return 1;
@@ -193,44 +190,21 @@ int start()
       pi_buffer_set_format(&buffer, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD, 1, PI_BUFFER_FORMAT_GRAY);
       pi_display_write(&ili, &buffer, 0, 0, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD);
     #endif
+
+#ifndef NE16
     for(int i=0; i<AT_INPUT_HEIGHT_SSD*AT_INPUT_WIDTH_SSD; i++){
       Input_1[i] -= 128;
     }
-    pi_ram_write(&HyperRam, l3_buff                                         , Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
-    pi_ram_write(&HyperRam, l3_buff+AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD  , Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
-    pi_ram_write(&HyperRam, l3_buff+2*AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD, Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
+#endif
+    pi_ram_write(&DefaultRam, l3_buff                                         , Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
+    pi_ram_write(&DefaultRam, l3_buff+AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD  , Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
+    pi_ram_write(&DefaultRam, l3_buff+2*AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD, Input_1, (uint32_t) AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD);
     #ifdef HAVE_HIMAX
       pi_l2_free(Input_1, CAMERA_SIZE*sizeof(char));
     #else
       pi_l2_free(Input_1, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
     #endif
-  PRINTF("Finished reading image\n");
-
-/*--------------------------TASK SETUP------------------------------*/
-  struct pi_cluster_task *task = pi_l2_malloc(sizeof(struct pi_cluster_task));
-  if(task==NULL) {
-    printf("pi_cluster_task alloc Error!\n");
-    pmsis_exit(-1);
-  }
-  PRINTF("Stack size is %d and %d\n",STACK_SIZE,SLAVE_STACK_SIZE );
-  memset(task, 0, sizeof(struct pi_cluster_task));
-  task->entry = &RunNetwork;
-  task->stack_size = STACK_SIZE;
-  task->slave_stack_size = SLAVE_STACK_SIZE;
-  task->arg = NULL;
-#else
-  PRINTF("Reading image\n");
-  if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH_SSD, AT_INPUT_HEIGHT_SSD, 1, Input_1, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char), IMGIO_OUTPUT_CHAR, 0)) {
-    printf("Failed to load image %s\n", ImageName);
-    return 1;
-  }
-  for (int i=0; i<AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD; i++){
-    int temp = Input_1[i] - 128;
-    Input_1[i]                                          = temp;
-    Input_1[i+AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD]   = temp;
-    Input_1[i+2*AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD] = temp;
-  }
-#endif
+  printf("Finished reading image\n");
 
   // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
   if (__PREFIX(CNN_Construct)())
@@ -238,62 +212,59 @@ int start()
     printf("Graph constructor exited with an error\n");
     return 1;
   }
-  PRINTF("Graph constructor was OK\n");
+  printf("Graph constructor was OK\n");
 
-#ifndef __EMUL__
+/*--------------------------TASK SETUP------------------------------*/
+  struct pi_cluster_task task;
+  pi_cluster_task(&task, (void (*)(void *))RunNetwork, NULL);
+  pi_cluster_task_stacks(&task, NULL, SLAVE_STACK_SIZE);
   #ifdef MEASUREMENTS
   for (int i=0; i<1000; i++){
     pi_time_wait_us(50000);
     pi_gpio_pin_write(NULL, PI_GPIO_A0_PAD_8_A4, 1);
     // Execute the function "RunNetwork" on the cluster.
-    pi_cluster_send_task_to_cl(&cluster_dev, task);
+    pi_cluster_send_task_to_cl(&cluster_dev, &task);
     pi_gpio_pin_write(NULL, PI_GPIO_A0_PAD_8_A4, 0);
   }
   #else
     // Execute the function "RunNetwork" on the cluster.
-    pi_cluster_send_task_to_cl(&cluster_dev, task);
+    pi_cluster_send_task_to_cl(&cluster_dev, &task);
   #endif
-#else
-  RunNetwork();
-#endif
 
-#ifndef __EMUL__
   #ifdef PERF
-	{
-		unsigned int TotalCycles = 0, TotalOper = 0;
-		printf("\n");
-		for (int i=0; i<(sizeof(SSD_Monitor)/sizeof(unsigned int)); i++) {
-			printf("%45s: Cycles: %10d, Operations: %10d, Operations/Cycle: %f\n", SSD_Nodes[i], SSD_Monitor[i], SSD_Op[i], ((float) SSD_Op[i])/ SSD_Monitor[i]);
-			TotalCycles += SSD_Monitor[i]; TotalOper += SSD_Op[i];
-		}
-		printf("\n");
-		printf("%45s: Cycles: %10d, Operations: %10d, Operations/Cycle: %f\n", "Total", TotalCycles, TotalOper, ((float) TotalOper)/ TotalCycles);
-		printf("\n");
-	}
+  {
+    unsigned int TotalCycles = 0, TotalOper = 0;
+    printf("\n");
+    for (unsigned int i=0; i<(sizeof(SSD_Monitor)/sizeof(unsigned int)); i++) {
+      TotalCycles += SSD_Monitor[i]; TotalOper += SSD_Op[i];
+    }
+    for (unsigned int i=0; i<(sizeof(SSD_Monitor)/sizeof(unsigned int)); i++) {
+      printf("%45s: Cycles: %12u, Cyc%%: %5.1f%%, Operations: %12u, Op%%: %5.1f%%, Operations/Cycle: %f\n", SSD_Nodes[i], SSD_Monitor[i], 100*((float) (SSD_Monitor[i]) / TotalCycles), SSD_Op[i], 100*((float) (SSD_Op[i]) / TotalOper), ((float) SSD_Op[i])/ SSD_Monitor[i]);
+    }
+    printf("\n");
+    printf("%45s: Cycles: %12u, Cyc%%: 100.0%%, Operations: %12u, Op%%: 100.0%%, Operations/Cycle: %f\n", "Total", TotalCycles, TotalOper, ((float) TotalOper)/ TotalCycles);
+    printf("\n");
+  }
   #endif
-#endif
+
   __PREFIX(CNN_Destruct)();
     if(out_scores[0] > SCORE_THR){
-      int box_y_min = (int)(FIX2FP(out_boxes[0]*ssdlite_ocr_Output_1_OUT_QSCALE,ssdlite_ocr_Output_1_OUT_QNORM)*240);
-      int box_x_min = (int)(FIX2FP(out_boxes[1]*ssdlite_ocr_Output_1_OUT_QSCALE,ssdlite_ocr_Output_1_OUT_QNORM)*320);
-      int box_y_max = (int)(FIX2FP(out_boxes[2]*ssdlite_ocr_Output_1_OUT_QSCALE,ssdlite_ocr_Output_1_OUT_QNORM)*240);
-      int box_x_max = (int)(FIX2FP(out_boxes[3]*ssdlite_ocr_Output_1_OUT_QSCALE,ssdlite_ocr_Output_1_OUT_QNORM)*320);
+      int box_y_min = (int)(FIX2FP(( (int) out_boxes[0] - ssdlite_ocr_Output_1_OUT_ZERO_POINT )*ssdlite_ocr_Output_1_OUT_QSCALE,ssdlite_ocr_Output_1_OUT_QNORM)*240);
+      int box_x_min = (int)(FIX2FP(( (int) out_boxes[1] - ssdlite_ocr_Output_1_OUT_ZERO_POINT )*ssdlite_ocr_Output_1_OUT_QSCALE,ssdlite_ocr_Output_1_OUT_QNORM)*320);
+      int box_y_max = (int)(FIX2FP(( (int) out_boxes[2] - ssdlite_ocr_Output_1_OUT_ZERO_POINT )*ssdlite_ocr_Output_1_OUT_QSCALE,ssdlite_ocr_Output_1_OUT_QNORM)*240);
+      int box_x_max = (int)(FIX2FP(( (int) out_boxes[3] - ssdlite_ocr_Output_1_OUT_ZERO_POINT )*ssdlite_ocr_Output_1_OUT_QSCALE,ssdlite_ocr_Output_1_OUT_QNORM)*320);
       int box_h = box_y_max - box_y_min;
       int box_w = box_x_max - box_x_min;
+      printf("BBOX (x, y, w, h): (%d, %d, %d, %d) SCORE: %f\n", box_x_min, box_y_min, box_w, box_h, FIX2FP(out_scores[0],7));
+
       #ifdef HAVE_LCD
         writeFillRect(&ili, box_x_min, box_y_min, 2, box_h, 0x03E0);
         writeFillRect(&ili, box_x_min, box_y_min, box_w, 2, 0x03E0);
         writeFillRect(&ili, box_x_min, box_y_max, box_w, 2, 0x03E0);
         writeFillRect(&ili, box_x_max, box_y_min, 2, box_h, 0x03E0);
       #endif
-      PRINTF("draw.rectangle((%d,%d,%d,%d), outline=(255, 255, 0))\n",
-        (int)(FIX2FP(box_x_min,14)*320),
-        (int)(FIX2FP(box_y_min,14)*240),
-        (int)(FIX2FP(box_x_max,14)*320),
-        (int)(FIX2FP(box_y_max,14)*240)
-        );
   }
-  PRINTF("Ended\n");
+  printf("Ended\n");
 #ifndef __EMUL__
   #ifdef PERF
     break;
@@ -303,23 +274,17 @@ int start()
 #endif
 }
 
-#ifndef __EMUL__
-int main(void)
-{
-  PRINTF("\n\n\t *** OCR SSD ***\n\n");
-  return pmsis_kickoff((void *) start);
-}
-#else
 int main(int argc, char *argv[])
 {
+#ifdef __EMUL__
     if (argc < 2)
     {
-        PRINTF("Usage: ./exe [image_file]\n");
+        printf("Usage: ./exe [image_file]\n");
         exit(-1);
     }
     ImageName = argv[1];
-    PRINTF("\n\n\t *** OCR SSD Emul ***\n\n");
+#endif
+    printf("\n\n\t *** OCR SSD ***\n\n");
     start();
     return 0;
 }
-#endif

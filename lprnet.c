@@ -22,44 +22,51 @@ char *ImageName;
 
 #define AT_INPUT_SIZE (AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*AT_INPUT_COLORS_LPR)
 
-AT_HYPERFLASH_FS_EXT_ADDR_TYPE __PREFIX(_L3_Flash) = 0;
+AT_HYPERFLASH_FS_EXT_ADDR_TYPE lprnet_L3_Flash = 0;
 
 static char *CHAR_DICT [71] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "<Anhui>", "<Beijing>", "<Chongqing>", "<Fujian>", "<Gansu>", "<Guangdong>", "<Guangxi>", "<Guizhou>", "<Hainan>", "<Hebei>", "<Heilongjiang>", "<Henan>", "<HongKong>", "<Hubei>", "<Hunan>", "<InnerMongolia>", "<Jiangsu>", "<Jiangxi>", "<Jilin>", "<Liaoning>", "<Macau>", "<Ningxia>", "<Qinghai>", "<Shaanxi>", "<Shandong>", "<Shanghai>", "<Shanxi>", "<Sichuan>", "<Tianjin>", "<Tibet>", "<Xinjiang>", "<Yunnan>", "<Zhejiang>", "<police>", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "_"};
 
 typedef signed char IMAGE_IN_T;
-#ifdef __EMUL__
-	unsigned char Input_1[AT_INPUT_SIZE];
+unsigned char * Input_1;
+#ifdef NE16
+typedef unsigned char OUT_T;
 #else
-	unsigned char * Input_1;
-	static struct pi_device dmacpy;
+typedef signed char OUT_T;
 #endif
-signed char * Output_1;
+OUT_T * Output_1;
 
 static void RunNetwork()
 {
 #ifdef PERF
-	PRINTF("Start timer\n");
+	printf("Start timer\n");
 	gap_cl_starttimer();
 	gap_cl_resethwtimer();
 #endif
-  __PREFIX(CNN)(Input_1, Output_1);
+ 	lprnetCNN(Input_1, Output_1);
 
-	PRINTF("Runner completed\n");
+	printf("Runner completed\n");
 	int max_prob;
 	int predicted_char = 70;
-	PRINTF("OUTPUT: \n");
+  	int prev_char = 70;
+	printf("OUTPUT: \n");
 	for (int i=0; i<88; i++){
 		max_prob = 0x80000000;
 		for (int j=0; j<71; j++){
-			if (Output_1[i+j*88]>max_prob){
-				max_prob = Output_1[i+j*88];
+			#ifdef NE16
+			OUT_T char_score = Output_1[i*71+j];
+			#else
+			OUT_T char_score = Output_1[i+j*88];
+			#endif
+			if (char_score>max_prob){
+				max_prob = char_score;
 				predicted_char = j;
 			}
 		}
-		if (predicted_char==70) continue;
-		PRINTF("%s, ", CHAR_DICT[predicted_char]);
+		if (predicted_char==70|| prev_char == predicted_char) continue;
+    	prev_char = predicted_char;
+		printf("%s, ", CHAR_DICT[predicted_char]);
 	}
-	PRINTF("\n");
+	printf("\n");
 }
 
 int start()
@@ -72,87 +79,78 @@ int start()
 
 	/*-----------------------OPEN THE CLUSTER--------------------------*/
 	struct pi_device cluster_dev;
-	struct pi_cluster_conf conf;
-	pi_cluster_conf_init(&conf);
-	pi_open_from_conf(&cluster_dev, (void *)&conf);
-	pi_cluster_open(&cluster_dev);
+	struct pi_cluster_conf cl_conf;
+	pi_cluster_conf_init(&cl_conf);
+	cl_conf.id = 0;
+	cl_conf.cc_stack_size = STACK_SIZE;
+	pi_open_from_conf(&cluster_dev, (void *) &cl_conf);
+	if (pi_cluster_open(&cluster_dev))
+	{
+		printf("Cluster open failed !\n");
+		pmsis_exit(-4);
+	}
 
 	pi_freq_set(PI_FREQ_DOMAIN_CL, FREQ_CL*1000*1000);
 	pi_freq_set(PI_FREQ_DOMAIN_FC, FREQ_FC*1000*1000);
 
 	char *ImageName = __XSTR(AT_IMAGE);
 	//Reading Image from Bridge
-	uint8_t* Input_1 = (uint8_t*) pi_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
+	Input_1 = (uint8_t*) pi_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
 	if(Input_1==NULL){
-		PRINTF("Error allocating image buffer\n");
+		printf("Error allocating image buffer\n");
 		pmsis_exit(-1);
 	}
+#endif
 	/* -------------------- Read Image from bridge ---------------------*/
-	PRINTF("Reading image\n");
+	printf("Reading image\n");
 	if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR, 1, Input_1, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*sizeof(char), IMGIO_OUTPUT_CHAR, 0)) {
 		printf("Failed to load image %s\n", ImageName);
 		return 1;
 	}
 	for(int i=0; i<AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR; i++){
+		#ifdef NE16
+		int temp = Input_1[i];
+		#else
 		int temp = Input_1[i] - 128;
+		#endif
 		Input_1[i] = temp;
 		Input_1[i+AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR] = temp;
 		Input_1[i+2*AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR] = temp;
 	}
-	PRINTF("Finished reading image\n");
-#else
-	PRINTF("Reading image\n");
-	if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR, 1, Input_1, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*sizeof(char), IMGIO_OUTPUT_CHAR, 0)) {
-		printf("Failed to load image %s\n", ImageName);
-		return 1;
-	}
-	for (int i=0; i<AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR; i++){
-		int temp = Input_1[i] - 128;
-		Input_1[i]                                          = temp;
-		Input_1[i+AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR]   = temp;
-		Input_1[i+2*AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR] = temp;
-	}
-#endif
+	printf("Finished reading image\n");
+
 	//Allocate output buffers:
-	Output_1  = (char *)AT_L2_ALLOC(0, 71*88);
+	Output_1  = (OUT_T *)AT_L2_ALLOC(0, 71*88);
 	if(Output_1==NULL){
 		printf("Error Allocating CNN output buffers");
 		return 1;
 	}
 
 	// IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
-	if (__PREFIX(CNN_Construct)())
+	if (lprnetCNN_Construct())
 	{
 		printf("Graph constructor exited with an error\n");
 		return 1;
 	}
-	PRINTF("Graph constructor was OK\n");
+	printf("Graph constructor was OK\n");
 
 #ifndef __EMUL__
 	/*--------------------------TASK SETUP------------------------------*/
-	struct pi_cluster_task *task = pi_l2_malloc(sizeof(struct pi_cluster_task));
-	if(task==NULL) {
-		printf("pi_cluster_task alloc Error!\n");
-		pmsis_exit(-1);
-	}
-	PRINTF("Stack size is %d and %d\n",STACK_SIZE,SLAVE_STACK_SIZE );
-	memset(task, 0, sizeof(struct pi_cluster_task));
-	task->entry = &RunNetwork;
-	task->stack_size = STACK_SIZE;
-	task->slave_stack_size = SLAVE_STACK_SIZE;
-	task->arg = NULL;
+  struct pi_cluster_task task;
+  pi_cluster_task(&task, (void (*)(void *))RunNetwork, NULL);
+  pi_cluster_task_stacks(&task, NULL, SLAVE_STACK_SIZE);
 
 	#ifdef MEASUREMENTS
 	for (int i=0; i<1000; i++){
 		pi_time_wait_us(50000);
 	    pi_gpio_pin_write(NULL, PI_GPIO_A0_PAD_8_A4, 1);
 		// Execute the function "RunNetwork" on the cluster.
-		pi_cluster_send_task_to_cl(&cluster_dev, task);
+		pi_cluster_send_task_to_cl(&cluster_dev, &task);
 	    pi_gpio_pin_write(NULL, PI_GPIO_A0_PAD_8_A4, 0);
     }
     #else
 		// Execute the function "RunNetwork" on the cluster.
-		pi_cluster_send_task_to_cl(&cluster_dev, task);
+		pi_cluster_send_task_to_cl(&cluster_dev, &task);
 	#endif
 #else
 	RunNetwork();
@@ -162,43 +160,38 @@ int start()
 	{
 		unsigned int TotalCycles = 0, TotalOper = 0;
 		printf("\n");
-		for (int i=0; i<(sizeof(LPR_Monitor)/sizeof(unsigned int)); i++) {
-			printf("%45s: Cycles: %10d, Operations: %10d, Operations/Cycle: %f\n", LPR_Nodes[i],
-			       LPR_Monitor[i], LPR_Op[i], ((float) LPR_Op[i])/ LPR_Monitor[i]);
+		for (unsigned int i=0; i<(sizeof(LPR_Monitor)/sizeof(unsigned int)); i++) {
 			TotalCycles += LPR_Monitor[i]; TotalOper += LPR_Op[i];
 		}
+		for (unsigned int i=0; i<(sizeof(LPR_Monitor)/sizeof(unsigned int)); i++) {
+			printf("%45s: Cycles: %12u, Cyc%%: %5.1f%%, Operations: %12u, Op%%: %5.1f%%, Operations/Cycle: %f\n", LPR_Nodes[i], LPR_Monitor[i], 100*((float) (LPR_Monitor[i]) / TotalCycles), LPR_Op[i], 100*((float) (LPR_Op[i]) / TotalOper), ((float) LPR_Op[i])/ LPR_Monitor[i]);
+		}
 		printf("\n");
-		printf("%45s: Cycles: %10d, Operations: %10d, Operations/Cycle: %f\n", "Total", TotalCycles, TotalOper, ((float) TotalOper)/ TotalCycles);
+		printf("%45s: Cycles: %12u, Cyc%%: 100.0%%, Operations: %12u, Op%%: 100.0%%, Operations/Cycle: %f\n", "Total", TotalCycles, TotalOper, ((float) TotalOper)/ TotalCycles);
 		printf("\n");
 	}
 #endif
 
-	__PREFIX(CNN_Destruct)();
+	lprnetCNN_Destruct();
 
 #ifndef __EMUL__
 	pmsis_exit(0);
 #endif
-	PRINTF("Ended\n");
+	printf("Ended\n");
 	return 0;
 }
 
-#ifndef __EMUL__
-int main(void)
-{
-    PRINTF("\n\n\t *** NNTOOL LPRNET ***\n\n");
-  	return pmsis_kickoff((void *) start);
-}
-#else
 int main(int argc, char *argv[])
 {
+#ifdef __EMUL__
     if (argc < 2)
     {
-        PRINTF("Usage: mnist [image_file]\n");
+        printf("Usage: mnist [image_file]\n");
         exit(-1);
     }
     ImageName = argv[1];
-    PRINTF("\n\n\t *** NNTOOL LPRNET emul ***\n\n");
+#endif
+    printf("\n\n\t *** NNTOOL LPRNET ***\n\n");
     start();
     return 0;
 }
-#endif

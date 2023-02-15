@@ -1,0 +1,29 @@
+adjust
+fusions --scale8
+freeze input_1
+qtune --step * use_ne16=true
+show 0
+qshow 0
+
+nodeoption 1 NODE_CNAME LPR_TransIn
+
+set l2_ram_ext_managed false
+set graph_const_exec_from_flash true
+set graph_size_opt 2
+
+############## PERF COUNTER #################
+set graph_monitor_cvar_name LPR_Monitor
+set graph_produce_operinfos_cvar_name LPR_Op
+set graph_produce_node_cvar_name LPR_Nodes
+set graph_produce_node_names true
+set graph_produce_operinfos true
+set graph_monitor_cycles true
+
+# RAM/FLASH Settings
+set l3_ram_device $(MODEL_L3_RAM)
+set l3_flash_device $(MODEL_L3_FLASH)
+
+#set graph_dump_tensor 6
+#set graph_checksum 1
+#set graph_trace_exec true
+save_state
