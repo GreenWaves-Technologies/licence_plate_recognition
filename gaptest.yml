@@ -16,4 +16,4 @@ variants:
             - integration
             - release
         duration: standard
-        flags: ~
+        flags: CI=y

@@ -116,7 +116,6 @@ static int open_camera_himax(struct pi_device *device)
 
 static void RunSSDNetwork()
 {
-  PRINTF("Running SSD model on cluster\n");
 #ifdef PERF
   gap_cl_starttimer();
   gap_cl_resethwtimer();
@@ -131,7 +130,6 @@ static void RunSSDNetwork()
 
 static void RunLPRNetwork()
 {
-  PRINTF("Running LPR model on cluster\n");
 #ifdef PERF
   gap_cl_starttimer();
   gap_cl_resethwtimer();
@@ -288,7 +286,6 @@ while(1)
     #else
       pi_l2_free(Input_1, AT_INPUT_WIDTH_SSD*AT_INPUT_HEIGHT_SSD*sizeof(char));
     #endif
-    PRINTF("Finished reading image\n");
 
     // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
     int ssd_constructor_err = __PREFIX1(CNN_Construct)();
@@ -297,7 +294,6 @@ while(1)
       printf("SSD Graph constructor exited with an error: %d\n", ssd_constructor_err);
       pmsis_exit(-1);
     }
-    PRINTF("SSD Graph constructor was OK\n");
 
     /*--------------------------TASK SETUP------------------------------*/
     struct pi_cluster_task *task = pi_l2_malloc(sizeof(struct pi_cluster_task));
@@ -426,14 +422,12 @@ while(1)
       WriteImageToFile("../../resized_cropped_plate.ppm", AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR, 1, img_plate_resized, GRAY_SCALE_IO);
 
       // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
-      PRINTF("LPR Graph constructor ...\n");
       int lpr_constructor_err = __PREFIX2(CNN_Construct)();
       if (lpr_constructor_err)
       {
         printf("LPR Graph constructor exited with an error: %d\n", lpr_constructor_err);
         continue;
       }
-      PRINTF("LPR Graph constructor was OK\n");
       out_lpr = (OUT_T *) pi_l2_malloc(NUM_CHARS_DICT*NUM_STRIPES*sizeof(char));
       if(out_lpr==NULL){
         printf("out_lpr alloc Error!\n");
