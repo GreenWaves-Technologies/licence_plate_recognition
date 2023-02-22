@@ -59,8 +59,6 @@ struct pi_device camera;
 struct pi_device DefaultRam;
 struct pi_device ili;
 static uint32_t l3_buff;
-signed char * img_plate_resized;
-signed char * out_lpr;
 static pi_buffer_t buffer;
 static pi_buffer_t buffer_plate;
 static pi_event_t event_himax;
@@ -70,6 +68,13 @@ char OUT_CHAR[100];
 L2_MEM short int out_boxes[40];
 L2_MEM signed char out_scores[10];
 L2_MEM signed char out_classes[10];
+#ifdef NE16
+typedef unsigned char OUT_T;
+#else
+typedef signed char OUT_T;
+#endif
+OUT_T * img_plate_resized;
+OUT_T * out_lpr;
 
 #define NUM_STRIPES     88
 #define NUM_CHARS_DICT  71
@@ -113,12 +118,11 @@ static void RunSSDNetwork()
 {
   PRINTF("Running SSD model on cluster\n");
 #ifdef PERF
-  printf("Start timer\n");
   gap_cl_starttimer();
   gap_cl_resethwtimer();
   int start = gap_cl_readhwtimer();
 #endif
-  __PREFIX1(CNN)((signed char *) l3_buff, out_boxes, out_classes, out_scores);
+  __PREFIX1(CNN)((OUT_T *) l3_buff, out_boxes, out_classes, out_scores);
 #ifdef PERF
   int end = gap_cl_readhwtimer();
   printf("SSD PERF: %d cycles\n", end - start);
@@ -129,7 +133,6 @@ static void RunLPRNetwork()
 {
   PRINTF("Running LPR model on cluster\n");
 #ifdef PERF
-  printf("Start timer\n");
   gap_cl_starttimer();
   gap_cl_resethwtimer();
   int start = gap_cl_readhwtimer();
@@ -149,8 +152,13 @@ static void RunLPRNetwork()
   for (int i=0; i<NUM_STRIPES; i++){
     max_prob = 0x80000000;
     for (int j=0; j<NUM_CHARS_DICT; j++){
-      if (out_lpr[i+j*NUM_STRIPES]>max_prob){
-        max_prob = out_lpr[i+j*NUM_STRIPES];
+      #ifdef NE16
+      OUT_T char_score = out_lpr[i*71+j];
+      #else
+      OUT_T char_score = out_lpr[i+j*88];
+      #endif
+      if (char_score>max_prob){
+        max_prob = char_score;
         predicted_char = j;
       }
     }
@@ -330,8 +338,8 @@ while(1)
       int box_w = box_x_max - box_x_min;
       //PRINTF("BBOX (x, y, w, h): (%d, %d, %d, %d) SCORE: %f\n", out_boxes[0], out_boxes[1], out_boxes[2], out_boxes[3], FIX2FP(out_scores[0],7));
       printf("BBOX (x, y, w, h): (%d, %d, %d, %d) SCORE: %f\n", box_x_min, box_y_min, box_w, box_h, FIX2FP(out_scores[0],7));
-      img_plate_resized      = (signed char *) pi_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
-      signed char* img_plate = (signed char *) pi_l2_malloc(box_w*box_h*sizeof(char));
+      img_plate_resized      = (OUT_T *) pi_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
+      OUT_T* img_plate = (OUT_T *) pi_l2_malloc(box_w*box_h*sizeof(char));
     	if(img_plate==NULL || img_plate_resized==NULL){
     	  printf("Error allocating image plate buffers\n");
     	  pmsis_exit(-1);
@@ -415,11 +423,7 @@ while(1)
         printf("Copy from L2 to L2 failed : %ld\n", errors); pmsis_exit(-5);
       }
       #endif
-      #ifdef SAVE_PLATE_IMAGE
-      for (int i=0; i<AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR; i++) img_plate_resized[i] -=128;
-      WriteImageToFile("../../../resized_cropped_plate.ppm", AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR, 1, img_plate_resized, GRAY_SCALE_IO);
-      for (int i=0; i<AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR; i++) img_plate_resized[i] +=128;
-      #endif
+      WriteImageToFile("../../resized_cropped_plate.ppm", AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR, 1, img_plate_resized, GRAY_SCALE_IO);
 
       // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
       PRINTF("LPR Graph constructor ...\n");
@@ -430,7 +434,7 @@ while(1)
         continue;
       }
       PRINTF("LPR Graph constructor was OK\n");
-      out_lpr = (signed char *) pi_l2_malloc(NUM_CHARS_DICT*NUM_STRIPES*sizeof(char));
+      out_lpr = (OUT_T *) pi_l2_malloc(NUM_CHARS_DICT*NUM_STRIPES*sizeof(char));
       if(out_lpr==NULL){
         printf("out_lpr alloc Error!\n");
         pmsis_exit(-1);
@@ -441,7 +445,6 @@ while(1)
         printf("pi_cluster_task alloc Error!\n");
         pmsis_exit(-1);
       }
-      PRINTF("Stack size is %d and %d\n",STACK_SIZE,SLAVE_STACK_SIZE );
       pi_cluster_task(task_recogniction, (void (*)(void *))&RunLPRNetwork, NULL);
 #ifdef __GAP8__
       task_recogniction->stack_size = STACK_SIZE;
@@ -461,6 +464,23 @@ while(1)
       #endif
     }
   }
+
+#ifdef PERF
+  {
+    unsigned int SSDCycles = 0, SSDOperTot = 0;
+    for (unsigned int i=0; i<(sizeof(SSD_Monitor)/sizeof(unsigned int)); i++) {
+      SSDCycles += SSD_Monitor[i]; SSDOperTot += SSD_Op[i];
+    }
+    unsigned int LPRCycles = 0, LPROperTot = 0;
+    for (unsigned int i=0; i<(sizeof(LPR_Monitor)/sizeof(unsigned int)); i++) {
+      LPRCycles += LPR_Monitor[i]; LPROperTot += LPR_Op[i];
+    }
+    unsigned int TotalCycles = SSDCycles + LPRCycles, TotalOper = SSDOperTot + LPROperTot;
+    printf("%45s: Cycles: %12u, Cyc%%: %5.1f%%, Operations: %12u, Op%%: %5.1f%%, Operations/Cycle: %f\n", "SSD", SSDCycles, ((float) 100*SSDCycles)/ TotalCycles, SSDOperTot, ((float) 100*SSDOperTot)/ TotalOper, ((float) SSDOperTot)/ SSDCycles);
+    printf("%45s: Cycles: %12u, Cyc%%: %5.1f%%, Operations: %12u, Op%%: %5.1f%%, Operations/Cycle: %f\n", "LPR", LPRCycles, ((float) 100*LPRCycles)/ TotalCycles, LPROperTot, ((float) 100*LPROperTot)/ TotalOper, ((float) LPROperTot)/ LPRCycles);
+    printf("%45s: Cycles: %12u, Cyc%%: 100.0%%, Operations: %12u, Op%%: 100.0%%, Operations/Cycle: %f\n", "Total", TotalCycles, TotalOper, ((float) TotalOper)/ TotalCycles);
+  }
+#endif
 pmsis_exit(0);
 }
 

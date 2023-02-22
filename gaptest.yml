@@ -1,13 +1,13 @@
 name: licence_plate_recognition
+builder: cmake
 boards: []
 platforms: 
     - board
     - gvsoc
 os: 
 #- freertos TODO: to be fixed in freeRTOS
-    - pulpos
+    - freertos
 chips: 
-    - gap8
     - gap9
 variants:
     std:
