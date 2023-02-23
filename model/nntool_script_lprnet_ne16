@@ -26,4 +26,6 @@ set l3_flash_device $(MODEL_L3_FLASH)
 #set graph_dump_tensor 6
 #set graph_checksum 1
 #set graph_trace_exec true
+
+set gen_name_suffix lpr
 save_state

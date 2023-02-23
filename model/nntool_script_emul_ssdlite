@@ -32,5 +32,5 @@ set graph_const_exec_from_flash true
 #set graph_monitor_cycles true
 
 set graph_dump_tensor 7
-
+set gen_name_suffix ssd
 save_state

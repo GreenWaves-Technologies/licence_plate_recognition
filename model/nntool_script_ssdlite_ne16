@@ -33,4 +33,6 @@ set graph_produce_node_names true
 set graph_produce_operinfos true
 set graph_monitor_cycles true
 
+set gen_name_suffix ssd
+
 save_state
