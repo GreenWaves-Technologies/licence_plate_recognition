@@ -168,13 +168,6 @@ static void RunLPRNetwork()
   }
   PRINTF("\n");
   strcat(OUT_CHAR, "\0");
-  #ifdef TEST
-    //test for image: china_1
-    if (strcmp(OUT_CHAR, "<Shandong>Q3X5U3")){
-      printf("Error predicting characters on china_1, should be <Shandong>Q3X5U3\n");
-      pmsis_exit(-1);
-    }
-  #endif
 }
 
 static void Resize(KerResize_ArgT *KerArg)
@@ -454,6 +447,15 @@ while(1)
       pi_l2_free(out_lpr, NUM_CHARS_DICT*NUM_STRIPES*sizeof(char));
       pi_l2_free(img_plate_resized, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
       #if defined (ONE_ITER) || defined (TEST)
+        #ifdef TEST
+          //test for image: china_1
+          if (strcmp(OUT_CHAR, "<Shandong>Q3X5U3")){
+            printf("Error predicting characters on china_1, should be <Shandong>Q3X5U3\n");
+            pmsis_exit(-1);
+          }
+        printf("Correct Prediction\n");
+        pmsis_exit(0);
+        #endif
         break;
       #endif
     }

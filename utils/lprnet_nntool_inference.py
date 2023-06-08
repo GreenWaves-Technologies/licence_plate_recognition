@@ -2,7 +2,7 @@ from nntool.api import NNGraph
 from PIL import Image
 import numpy as np
 
-NE16 = False
+NE16 = True
 
 G = NNGraph.load_graph("model/lprnet.tflite", load_quantization=True)
 G.adjust_order()
