@@ -17,3 +17,4 @@ variants:
             - release
         duration: standard
         flags: CI=y
+
