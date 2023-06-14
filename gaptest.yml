@@ -1,20 +1,49 @@
 name: licence_plate_recognition
-builder: cmake
-boards: []
-platforms: 
-    - board
-    - gvsoc
-os: 
-#- freertos TODO: to be fixed in freeRTOS
-    - freertos
-chips: 
-    - gap9
 variants:
-    std:
-        name: standard
-        tags:
-            - integration
-            - release
-        duration: standard
-        flags: CI=y
+    gvsoc:
+        chip: gap9
+        board: gap9evk
+        platform: gvsoc
+        os: freertos
+        builder: cmake
+        flags:
+            - CI=y
+            - CONFIG_APP_MODE=0
+            - CONFIG_CNN_SQ8=y
+            - CONFIG_CNN_NE16=y
+            - CONFIG_MODEL_L2_MEMORY=1350000
+            - CONFIG_NNTOOL_MODEL_QUANTIZED=y
+            - CONFIG_MODEL_LOGLEVEL=1
+            - CONFIG_ENABLE_NNTOOL=y
+            - CONFIG_BOARD_GAP9MOD_V1_0_B=y
+            - CONFIG_BOARD_GAP9EVK_V1_3=y
+            - CONFIG_LIB_GAP_LIB=y
+            - CONFIG_LIB_GAP_LIB_IMG_IO=y
+            - CONFIG_DRIVER_READFS=y
+            - CONFIG_DRIVER_HOSTFS=y
+            - CONFIG_DRIVER_TYPE_FLASH=y
+            - CONFIG_DRIVER_TYPE_RAM=y
 
+    board:
+        chip: gap9
+        board: gap9evk
+        platform: board
+        os: freertos
+        builder: cmake
+        flags:
+            - CI=y
+            - CONFIG_APP_MODE=0
+            - CONFIG_CNN_SQ8=y
+            - CONFIG_CNN_NE16=y
+            - CONFIG_MODEL_L2_MEMORY=1350000
+            - CONFIG_NNTOOL_MODEL_QUANTIZED=y
+            - CONFIG_MODEL_LOGLEVEL=1
+            - CONFIG_ENABLE_NNTOOL=y
+            - CONFIG_BOARD_GAP9MOD_V1_0_B=y
+            - CONFIG_BOARD_GAP9EVK_V1_3=y
+            - CONFIG_LIB_GAP_LIB=y
+            - CONFIG_LIB_GAP_LIB_IMG_IO=y
+            - CONFIG_DRIVER_READFS=y
+            - CONFIG_DRIVER_HOSTFS=y
+            - CONFIG_DRIVER_TYPE_FLASH=y
+            - CONFIG_DRIVER_TYPE_RAM=y
