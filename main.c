@@ -13,7 +13,7 @@
 #include "ssdlite_ocrKernels.h"
 #include "lprnetKernels.h"
 #include "ResizeBasicKernels.h"
-#include "ssdlite_ocrInfo.h"
+#include "ssdlite_ocrModelInfos.h"
 
 #include "pmsis.h"
 #include "bsp/bsp.h"
@@ -412,7 +412,7 @@ while(1)
         printf("Copy from L2 to L2 failed : %ld\n", errors); pmsis_exit(-5);
       }
       #endif
-      WriteImageToFile("../../resized_cropped_plate.ppm", AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR, 1, img_plate_resized, GRAY_SCALE_IO);
+      WriteImageToFile("../../resized_cropped_plate.ppm", AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR, 1, (unsigned char *)img_plate_resized, GRAY_SCALE_IO);
 
       // IMPORTANT - MUST BE CALLED AFTER THE CLUSTER IS SWITCHED ON!!!!
       int lpr_constructor_err = __PREFIX2(CNN_Construct)();

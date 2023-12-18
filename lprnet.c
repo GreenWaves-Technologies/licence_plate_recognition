@@ -16,9 +16,6 @@
 #define __XSTR(__s) __STR(__s)
 #define __STR(__s) #__s
 
-#ifdef __EMUL__
-char *ImageName;
-#endif
 
 #define AT_INPUT_SIZE (AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*AT_INPUT_COLORS_LPR)
 
@@ -27,13 +24,14 @@ AT_HYPERFLASH_FS_EXT_ADDR_TYPE lprnet_L3_Flash = 0;
 static char *CHAR_DICT [71] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "<Anhui>", "<Beijing>", "<Chongqing>", "<Fujian>", "<Gansu>", "<Guangdong>", "<Guangxi>", "<Guizhou>", "<Hainan>", "<Hebei>", "<Heilongjiang>", "<Henan>", "<HongKong>", "<Hubei>", "<Hunan>", "<InnerMongolia>", "<Jiangsu>", "<Jiangxi>", "<Jilin>", "<Liaoning>", "<Macau>", "<Ningxia>", "<Qinghai>", "<Shaanxi>", "<Shandong>", "<Shanghai>", "<Shanxi>", "<Sichuan>", "<Tianjin>", "<Tibet>", "<Xinjiang>", "<Yunnan>", "<Zhejiang>", "<police>", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "_"};
 
 typedef signed char IMAGE_IN_T;
-unsigned char * Input_1;
+
 #ifdef NE16
 typedef unsigned char OUT_T;
 #else
 typedef signed char OUT_T;
 #endif
 OUT_T * Output_1;
+OUT_T * Input_1;
 
 static void RunNetwork()
 {
@@ -42,7 +40,7 @@ static void RunNetwork()
 	gap_cl_starttimer();
 	gap_cl_resethwtimer();
 #endif
- 	lprnetCNN(Input_1, Output_1);
+ 	lprnetCNN( Input_1, Output_1);
 
 	printf("Runner completed\n");
 	int max_prob;
@@ -71,7 +69,7 @@ static void RunNetwork()
 
 int start()
 {	
-#ifndef __EMUL__
+
 	#ifdef MEASUREMENTS
     pi_gpio_pin_configure(NULL, PI_GPIO_A0_PAD_8_A4, PI_GPIO_OUTPUT);
     pi_gpio_pin_write(NULL, PI_GPIO_A0_PAD_8_A4, 0);
@@ -95,12 +93,12 @@ int start()
 
 	char *ImageName = __XSTR(AT_IMAGE);
 	//Reading Image from Bridge
-	Input_1 = (uint8_t*) pi_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
+	Input_1 = pi_l2_malloc(AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*3*sizeof(char));
 	if(Input_1==NULL){
 		printf("Error allocating image buffer\n");
 		pmsis_exit(-1);
 	}
-#endif
+
 	/* -------------------- Read Image from bridge ---------------------*/
 	printf("Reading image\n");
 	if (ReadImageFromFile(ImageName, AT_INPUT_WIDTH_LPR, AT_INPUT_HEIGHT_LPR, 1, Input_1, AT_INPUT_WIDTH_LPR*AT_INPUT_HEIGHT_LPR*sizeof(char), IMGIO_OUTPUT_CHAR, 0)) {
@@ -134,7 +132,6 @@ int start()
 	}
 	printf("Graph constructor was OK\n");
 
-#ifndef __EMUL__
 	/*--------------------------TASK SETUP------------------------------*/
   struct pi_cluster_task task;
   pi_cluster_task(&task, (void (*)(void *))RunNetwork, NULL);
@@ -152,9 +149,6 @@ int start()
 		// Execute the function "RunNetwork" on the cluster.
 		pi_cluster_send_task_to_cl(&cluster_dev, &task);
 	#endif
-#else
-	RunNetwork();
-#endif
 
 #ifdef PERF
 	{
@@ -174,23 +168,14 @@ int start()
 
 	lprnetCNN_Destruct();
 
-#ifndef __EMUL__
 	pmsis_exit(0);
-#endif
+
 	printf("Ended\n");
 	return 0;
 }
 
 int main(int argc, char *argv[])
 {
-#ifdef __EMUL__
-    if (argc < 2)
-    {
-        printf("Usage: mnist [image_file]\n");
-        exit(-1);
-    }
-    ImageName = argv[1];
-#endif
     printf("\n\n\t *** NNTOOL LPRNET ***\n\n");
     start();
     return 0;

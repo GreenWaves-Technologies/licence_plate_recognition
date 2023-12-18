@@ -11,13 +11,11 @@
 
 #include "ssdlite_ocr.h"
 #include "ssdlite_ocrKernels.h"
-#include "ssdlite_ocrInfo.h"
+#include "ssdlite_ocrModelInfos.h"
 
-#ifndef __EMUL__
 #include "pmsis.h"
 #include "bsp/bsp.h"
 #include "bsp/ram.h"
-#endif
 #include "gaplib/ImgIO.h"
 
 #define __XSTR(__s) __STR(__s)
@@ -36,14 +34,15 @@
 
 AT_HYPERFLASH_FS_EXT_ADDR_TYPE __PREFIX(_L3_Flash) = 0;
 
-#ifdef __EMUL__
-  char *ImageName;
-  uint8_t Input_1[AT_INPUT_SIZE];
+struct pi_device camera;
+struct pi_device DefaultRam;
+struct pi_device ili;
+static uint32_t l3_buff;
+
+#ifndef NE16
+  signed char * Input;
 #else
-  struct pi_device camera;
-  struct pi_device DefaultRam;
-  struct pi_device ili;
-  static uint32_t l3_buff;
+  unsigned char * Input;
 #endif
 
 L2_MEM short int out_boxes[40];
@@ -84,11 +83,9 @@ static void RunNetwork()
   gap_cl_starttimer();
   gap_cl_resethwtimer();
 #endif
-#ifndef __EMUL__
-  __PREFIX(CNN)(l3_buff, out_boxes, out_classes, out_scores);
-#else
-  __PREFIX(CNN)(Input_1, out_boxes, out_classes, out_scores);
-#endif
+
+  __PREFIX(CNN)(Input, out_boxes, out_classes, out_scores);
+
 }
 
 int start()
@@ -120,6 +117,14 @@ int start()
     pmsis_exit(-4);
   }
 
+
+  #ifndef NE16
+    Input = (signed char *)l3_buff;
+  #else
+    Input = (unsigned char *)l3_buff;
+  #endif
+
+  
 
 /*-----------------------OPEN THE CLUSTER--------------------------*/
   struct pi_device cluster_dev;
@@ -265,25 +270,17 @@ int start()
       #endif
   }
   printf("Ended\n");
-#ifndef __EMUL__
+
   #ifdef PERF
     break;
   #endif
 }
-  pmsis_exit(0);
-#endif
+  return 0;
+
 }
 
 int main(int argc, char *argv[])
 {
-#ifdef __EMUL__
-    if (argc < 2)
-    {
-        printf("Usage: ./exe [image_file]\n");
-        exit(-1);
-    }
-    ImageName = argv[1];
-#endif
     printf("\n\n\t *** OCR SSD ***\n\n");
     start();
     return 0;

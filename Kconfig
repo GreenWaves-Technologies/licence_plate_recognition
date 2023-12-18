@@ -45,6 +45,7 @@ menu "Licence Plate Recognition APP menu"
         config MODEL_NE16
             bool "NE16 Model"
             select CNN_NE16
+            select CNN_SQ8
 
         config MODEL_SQ8
             bool "Int8 Model"
