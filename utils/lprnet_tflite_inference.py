@@ -41,13 +41,18 @@ def main():
     out = interpreter.get_tensor(output_details[0]['index'])
     out_char_codes = [np.argmax(out[0][i]) for i in range(out.shape[1])]
 
-    out_char = []
-    for char_code in out_char_codes:
-        if (char_code != 70): # blank char
-            for k, v in char_dict.items():
-                if char_code == v:
-                    out_char.append(k)
-                    continue
+    # Create reverse mapping for efficient lookup
+    code_to_char = {v: k for k, v in char_dict.items()}
+    
+    # Get the output tensor and max indices
+    out = interpreter.get_tensor(output_details[0]['index'])
+    out_char_codes = [np.argmax(out[0][i]) for i in range(out.shape[1])]
+
+    # Use map and filter for cleaner code
+    out_char = list(map(
+        code_to_char.get, 
+        filter(lambda code: code != 70, out_char_codes)
+    ))
 
     print(out_char)
 
