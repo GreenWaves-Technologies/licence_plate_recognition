@@ -42,13 +42,12 @@ def main():
     out_char_codes = [np.argmax(out[0][i]) for i in range(out.shape[1])]
 
     out_char = []
-    for i, char_code in enumerate(out_char_codes):
-        if char_code == 70:
-            continue
-        for k, v in char_dict.items():
-            if char_code == v:
-                out_char.append(k)
-                continue
+    for char_code in out_char_codes:
+        if (char_code != 70): # blank char
+            for k, v in char_dict.items():
+                if char_code == v:
+                    out_char.append(k)
+                    continue
 
     print(out_char)
 
